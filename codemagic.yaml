@@ -1,0 +1,26 @@
+workflows:
+  ios-workflow:
+    name: iOS Build
+    environment:
+      groups:
+        - supabase_credentials # Группа с вашими переменными
+      xcode: latest
+      cocoapods: default
+    scripts:
+      - name: Set up keychain
+        script: |
+          keychain initialize
+      - name: Set up code signing
+        script: |
+          app-store-connect fetch-signing-files "com.example.my_chat_app" --type IOS_APP_DEVELOPMENT
+      - name: Build IPA
+        script: |
+          xcode-project build-ipa \
+            --workspace "$CM_BUILD_DIR/ios/Runner.xcworkspace" \
+            --scheme "Runner"
+    artifacts:
+      - build/ios/ipa/*.ipa
+    publishing:
+      email:
+        recipients:
+          - crazynoob1566@gmail.com # Замените на ваш email
