@@ -1,16 +1,24 @@
+import 'dart:io';
 import 'package:flutter/material.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
-import 'package:flutter_dotenv/flutter_dotenv.dart';
 import 'package:intl/intl.dart';
 
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
 
-  await dotenv.load();
+  // Загружаем переменные окружения напрямую из системного окружения
+  final supabaseUrl = Platform.environment['SUPABASE_URL'] ?? '';
+  final supabaseAnonKey = Platform.environment['SUPABASE_ANON_KEY'] ?? '';
 
+  if (supabaseUrl.isEmpty || supabaseAnonKey.isEmpty) {
+    print('Ошибка: SUPABASE_URL или SUPABASE_ANON_KEY не установлены');
+    return;
+  }
+
+  // Инициализируем Supabase
   await Supabase.initialize(
-    url: dotenv.env['SUPABASE_URL']!,
-    anonKey: dotenv.env['SUPABASE_ANON_KEY']!,
+    url: supabaseUrl,
+    anonKey: supabaseAnonKey,
   );
 
   runApp(const MyApp());
@@ -23,7 +31,10 @@ class MyApp extends StatelessWidget {
   Widget build(BuildContext context) {
     return MaterialApp(
       title: 'Мой чат',
-      theme: ThemeData(primarySwatch: Colors.blue, useMaterial3: true),
+      theme: ThemeData(
+        primarySwatch: Colors.blue,
+        useMaterial3: true,
+      ),
       home: const UserSelectionScreen(),
     );
   }
@@ -44,8 +55,8 @@ class UserSelectionScreen extends StatelessWidget {
               onPressed: () => Navigator.pushReplacement(
                 context,
                 MaterialPageRoute(
-                  builder: (context) =>
-                      ChatScreen(currentUserId: 'user1', friendId: 'user2'),
+                  builder: (context) => const ChatScreen(
+                      currentUserId: 'user1', friendId: 'user2'),
                 ),
               ),
               child: const Text('Я - User 1'),
@@ -55,8 +66,8 @@ class UserSelectionScreen extends StatelessWidget {
               onPressed: () => Navigator.pushReplacement(
                 context,
                 MaterialPageRoute(
-                  builder: (context) =>
-                      ChatScreen(currentUserId: 'user2', friendId: 'user1'),
+                  builder: (context) => const ChatScreen(
+                      currentUserId: 'user2', friendId: 'user1'),
                 ),
               ),
               child: const Text('Я - User 2'),
@@ -104,9 +115,7 @@ class _ChatScreenState extends State<ChatScreen> {
       final response = await _supabase
           .from('messages')
           .select()
-          .or(
-            'sender_id.eq.${widget.currentUserId},receiver_id.eq.${widget.currentUserId}',
-          )
+          .or('sender_id.eq.${widget.currentUserId},receiver_id.eq.${widget.currentUserId}')
           .order('created_at', ascending: true);
 
       setState(() {
@@ -156,9 +165,9 @@ class _ChatScreenState extends State<ChatScreen> {
       _messageController.clear();
     } catch (e) {
       print('Ошибка отправки сообщения: $e');
-      ScaffoldMessenger.of(
-        context,
-      ).showSnackBar(SnackBar(content: Text('Ошибка отправки: $e')));
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('Ошибка отправки: $e')),
+      );
     } finally {
       setState(() {
         _isSending = false;
@@ -176,8 +185,7 @@ class _ChatScreenState extends State<ChatScreen> {
           onPressed: () => Navigator.pushReplacement(
             context,
             MaterialPageRoute(
-              builder: (context) => const UserSelectionScreen(),
-            ),
+                builder: (context) => const UserSelectionScreen()),
           ),
         ),
       ),
@@ -185,7 +193,9 @@ class _ChatScreenState extends State<ChatScreen> {
         children: [
           Expanded(
             child: _messages.isEmpty
-                ? const Center(child: Text('Нет сообщений'))
+                ? const Center(
+                    child: Text('Нет сообщений'),
+                  )
                 : ListView.builder(
                     padding: const EdgeInsets.all(8),
                     itemCount: _messages.length,
@@ -277,7 +287,9 @@ class MessageBubble extends StatelessWidget {
           children: [
             Text(
               message,
-              style: TextStyle(color: isMe ? Colors.white : Colors.black),
+              style: TextStyle(
+                color: isMe ? Colors.white : Colors.black,
+              ),
             ),
             const SizedBox(height: 4),
             Text(
