@@ -2,14 +2,21 @@ workflows:
   ios-workflow:
     name: iOS Build (Free Account)
     environment:
-      flutter: 3.22.0  # Явно указываем версию Flutter
+      flutter: stable  # Используем стабильную версию
       groups:
         - supabase_credentials
       xcode: latest
       cocoapods: default
     scripts:
+      - name: Debug Flutter version
+        script: |
+          echo "Flutter version:"
+          flutter --version
+          echo "Dart version:"
+          dart --version
       - name: Set up Flutter
         script: |
+          flutter config --no-analytics
           flutter packages pub get
       - name: Generate Flutter files
         script: |
