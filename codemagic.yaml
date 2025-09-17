@@ -12,10 +12,23 @@ workflows:
           keychain initialize
       - name: Build IPA without code signing
         script: |
-          xcode-project build-ipa \
-            --workspace "$CM_BUILD_DIR/ios/Runner.xcworkspace" \
-            --scheme "Runner" \
-            --disable-codesign
+          # Создаем архив без подписи
+          xcodebuild archive \
+            -workspace "$CM_BUILD_DIR/ios/Runner.xcworkspace" \
+            -scheme Runner \
+            -configuration Release \
+            -archivePath "$CM_BUILD_DIR/build/Runner.xcarchive" \
+            CODE_SIGN_IDENTITY="" \
+            CODE_SIGNING_REQUIRED=NO \
+            CODE_SIGNING_ALLOWED=NO
+          
+          # Экспортируем IPA без подписи
+          xcodebuild -exportArchive \
+            -archivePath "$CM_BUILD_DIR/build/Runner.xcarchive" \
+            -exportOptionsPlist "$CM_BUILD_DIR/ios/exportOptions.plist" \
+            -exportPath "$CM_BUILD_DIR/build/ios/ipa" \
+            CODE_SIGN_IDENTITY="" \
+            CODE_SIGNING_REQUIRED=NO
     artifacts:
       - build/ios/ipa/*.ipa
     publishing:
