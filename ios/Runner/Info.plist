@@ -60,5 +60,11 @@
 	<true/>
 	<key>ITSAppUsesNonExemptEncryption</key>
 	<false/>
+	
+	<!-- Дополнительные ключи для Flutter -->
+	<key>FLTEnablePlatformViews</key>
+	<true/>
+	<key>FLTPreviewAlphaPlatformViews</key>
+	<true/>
 </dict>
 </plist>
