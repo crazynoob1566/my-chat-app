@@ -10,23 +10,47 @@ workflows:
       - name: Set up Flutter
         script: |
           flutter packages pub get
-      - name: Build IPA without code signing
+      - name: Generate Flutter files
         script: |
           cd $CM_BUILD_DIR
-          flutter build ipa --release --no-codesign
+          flutter pub get
+          # Генерируем необходимые файлы для iOS
+          flutter build ios --config-only --no-codesign
+      - name: Build with xcodebuild
+        script: |
+          cd $CM_BUILD_DIR/ios
           
-          # Создаем папку, если она не существует
-          mkdir -p build/ios/ipa
+          # Создаем архив без подписи
+          xcodebuild archive \
+            -workspace Runner.xcworkspace \
+            -scheme Runner \
+            -configuration Release \
+            -archivePath build/Runner.xcarchive \
+            CODE_SIGN_IDENTITY="" \
+            CODE_SIGNING_REQUIRED=NO \
+            CODE_SIGNING_ALLOWED=NO
           
-          # Ищем IPA файл и копируем его в ожидаемую локацию
-          find build -name "*.ipa" -exec cp {} build/ios/ipa/Runner.ipa \;
+          # Создаем папку для IPA
+          mkdir -p build/ipa
+          
+          # Экспортируем IPA
+          xcodebuild -exportArchive \
+            -archivePath build/Runner.xcarchive \
+            -exportOptionsPlist ExportOptions.plist \
+            -exportPath build/ipa \
+            CODE_SIGN_IDENTITY="" \
+            CODE_SIGNING_REQUIRED=NO
+          
+          # Копируем IPA в ожидаемое место
+          mkdir -p $CM_BUILD_DIR/build/ios/ipa
+          cp build/ipa/*.ipa $CM_BUILD_DIR/build/ios/ipa/
       - name: Verify artifacts
         script: |
           echo "Проверка артефактов:"
           find $CM_BUILD_DIR -name "*.ipa" -type f
-          ls -la $CM_BUILD_DIR/build/ios/ipa/ || echo "Папка ipa не существует"
+          ls -la $CM_BUILD_DIR/build/ios/ipa/
     artifacts:
-      - $CM_BUILD_DIR/build/ios/ipa/*.ipa
+      - build/ios/ipa/*.ipa
     publishing:
       email:
         recipients:
