@@ -6,16 +6,9 @@
     <string>development</string>
     <key>uploadBitcode</key>
     <false/>
-    <key>uploadSymbols</key>
+    <key>compileBitcode</key>
     <false/>
     <key>signingStyle</key>
     <string>manual</string>
-    <key>signingCertificate</key>
-    <string></string>
-    <key>provisioningProfiles</key>
-    <dict>
-        <key>com.example.my-chat-app</key>
-        <string></string>
-    </dict>
 </dict>
 </plist>

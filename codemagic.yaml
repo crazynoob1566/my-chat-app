@@ -7,31 +7,26 @@ workflows:
       xcode: latest
       cocoapods: default
     scripts:
-      - name: Set up keychain
+      - name: Set up Flutter
         script: |
-          keychain initialize
+          flutter packages pub get
+      - name: Generate Flutter files
+        script: |
+          cd $CM_BUILD_DIR
+          flutter pub get
+          # Генерируем необходимые файлы конфигурации
+          flutter build ios --config-only --no-codesign
       - name: Build IPA without code signing
         script: |
-          # Создаем архив без подписи
-          xcodebuild archive \
-            -workspace "$CM_BUILD_DIR/ios/Runner.xcworkspace" \
-            -scheme Runner \
-            -configuration Release \
-            -archivePath "$CM_BUILD_DIR/build/Runner.xcarchive" \
-            CODE_SIGN_IDENTITY="" \
-            CODE_SIGNING_REQUIRED=NO \
-            CODE_SIGNING_ALLOWED=NO
-          
-          # Экспортируем IPA без подписи
-          xcodebuild -exportArchive \
-            -archivePath "$CM_BUILD_DIR/build/Runner.xcarchive" \
-            -exportOptionsPlist "$CM_BUILD_DIR/ios/exportOptions.plist" \
-            -exportPath "$CM_BUILD_DIR/build/ios/ipa" \
-            CODE_SIGN_IDENTITY="" \
-            CODE_SIGNING_REQUIRED=NO
+          cd $CM_BUILD_DIR
+          # Используем flutter build ipa с параметром --no-codesign
+          flutter build ipa \
+            --release \
+            --no-codesign \
+            --export-options-plist="$CM_BUILD_DIR/ios/exportOptions.plist"
     artifacts:
       - build/ios/ipa/*.ipa
     publishing:
       email:
         recipients:
-          - crazynoob1566@gmail.com
+          - your-email@example.com
