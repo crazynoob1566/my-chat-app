@@ -15,66 +15,22 @@ workflows:
           cd $CM_BUILD_DIR
           flutter pub get
           flutter build ios --config-only --no-codesign
-      - name: Build IPA without team
+      - name: Manual IPA creation
         script: |
           cd $CM_BUILD_DIR/ios
           
-          # Создаем архив без подписи
-          xcodebuild archive \
-            -workspace Runner.xcworkspace \
-            -scheme Runner \
-            -configuration Release \
-            -archivePath build/Runner.xcarchive \
-            CODE_SIGN_IDENTITY="" \
-            CODE_SIGNING_REQUIRED=NO \
-            CODE_SIGNING_ALLOWED=NO
+          # Собираем приложение без архивирования
+          xcodebuild -workspace Runner.xcworkspace -scheme Runner -configuration Release -sdk iphoneos CODE_SIGN_IDENTITY="" CODE_SIGNING_REQUIRED=NO CODE_SIGNING_ALLOWED=NO
           
-          # Создаем папку для IPA
-          mkdir -p build/ipa
+          # Создаем структуру IPA вручную
+          mkdir -p Payload
+          cp -r build/Release-iphoneos/Runner.app Payload/
+          zip -r Runner.ipa Payload
+          rm -rf Payload
           
-          # Создаем временный ExportOptions.plist без требований к команде
-          cat > TempExportOptions.plist << EOF
-          <?xml version="1.0" encoding="UTF-8"?>
-          <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
-          <plist version="1.0">
-          <dict>
-              <key>method</key>
-              <string>development</string>
-              <key>uploadBitcode</key>
-              <false/>
-              <key>compileBitcode</key>
-              <false/>
-              <key>signingStyle</key>
-              <string>manual</string>
-              <key>signingCertificate</key>
-              <string></string>
-              <key>provisioningProfiles</key>
-              <dict/>
-          </dict>
-          </plist>
-          EOF
-          
-          # Пытаемся экспортировать IPA
-          xcodebuild -exportArchive \
-            -archivePath build/Runner.xcarchive \
-            -exportOptionsPlist TempExportOptions.plist \
-            -exportPath build/ipa \
-            CODE_SIGN_IDENTITY="" \
-            CODE_SIGNING_REQUIRED=NO || echo "Экспорт не удался, но мы продолжим"
-          
-          # Альтернативный способ - используем команду packageApplication
-          # (это устаревший метод, но он может работать без команды разработчиков)
-          if [ ! -f "build/ipa/*.ipa" ]; then
-            echo "Пытаемся создать IPA с помощью packageApplication..."
-            /usr/bin/xcrun -sdk iphoneos PackageApplication \
-              -v build/Runner.xcarchive/Products/Applications/Runner.app \
-              -o $CM_BUILD_DIR/ios/build/ipa/Runner.ipa
-          fi
-          
-          # Копируем IPA в ожидаемое место
+          # Копируем IPA в нужное место
           mkdir -p $CM_BUILD_DIR/build/ios/ipa
-          cp build/ipa/*.ipa $CM_BUILD_DIR/build/ios/ipa/ 2>/dev/null || true
-          cp $CM_BUILD_DIR/ios/build/ipa/Runner.ipa $CM_BUILD_DIR/build/ios/ipa/ 2>/dev/null || true
+          cp Runner.ipa $CM_BUILD_DIR/build/ios/ipa/
       - name: Verify artifacts
         script: |
           echo "Проверка артефактов:"
