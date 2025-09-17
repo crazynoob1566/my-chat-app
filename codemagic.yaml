@@ -1,29 +1,32 @@
 workflows:
   ios-workflow:
-    name: iOS Build (Free Account)
+    name: iOS Build
     environment:
       groups:
         - supabase_credentials
       xcode: latest
       cocoapods: default
     scripts:
-      - name: Create .env file
-        script: |
-          cd $CM_BUILD_DIR
-          echo "SUPABASE_URL=$SUPABASE_URL" > .env
-          echo "SUPABASE_ANON_KEY=$SUPABASE_ANON_KEY" >> .env
       - name: Set up Flutter
         script: |
           flutter packages pub get
       - name: Build IPA without code signing
         script: |
           cd $CM_BUILD_DIR
-          flutter build ipa \
-            --release \
-            --no-codesign \
-            --export-options-plist="$CM_BUILD_DIR/ios/exportOptions.plist"
+          flutter build ipa --release --no-codesign
+          
+          # Создаем папку, если она не существует
+          mkdir -p build/ios/ipa
+          
+          # Ищем IPA файл и копируем его в ожидаемую локацию
+          find build -name "*.ipa" -exec cp {} build/ios/ipa/Runner.ipa \;
+      - name: Verify artifacts
+        script: |
+          echo "Проверка артефактов:"
+          find $CM_BUILD_DIR -name "*.ipa" -type f
+          ls -la $CM_BUILD_DIR/build/ios/ipa/ || echo "Папка ipa не существует"
     artifacts:
-      - build/ios/ipa/*.ipa
+      - $CM_BUILD_DIR/build/ios/ipa/*.ipa
     publishing:
       email:
         recipients:
