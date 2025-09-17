@@ -7,30 +7,53 @@ workflows:
       xcode: latest
       cocoapods: default
     scripts:
+      - name: Install CocoaPods
+        script: |
+          echo "Установка CocoaPods..."
+          sudo gem install cocoapods
+          pod --version
       - name: Set up Flutter
         script: |
+          echo "Настройка Flutter..."
           flutter packages pub get
+      - name: Install pods dependencies
+        script: |
+          echo "Установка Pods зависимостей..."
+          cd $CM_BUILD_DIR/ios
+          pod install
       - name: Build iOS app
         script: |
+          echo "Сборка iOS приложения..."
           cd $CM_BUILD_DIR
           flutter build ios --release --no-codesign
-      - name: Create IPA from Flutter build
+      - name: Create IPA manually
         script: |
-          cd $CM_BUILD_DIR/build/ios/iphoneos
-          mkdir -p Payload
-          cp -r Runner.app Payload/
+          echo "Создание IPA файла..."
+          cd $CM_BUILD_DIR
+          
+          # Создаем папку для IPA
+          mkdir -p build/ios/ipa/Payload
+          
+          # Копируем приложение
+          cp -R build/ios/iphoneos/Runner.app build/ios/ipa/Payload/
+          
+          # Создаем IPA
+          cd build/ios/ipa
           zip -r Runner.ipa Payload
-          mkdir -p $CM_BUILD_DIR/build/ios/ipa
-          cp Runner.ipa $CM_BUILD_DIR/build/ios/ipa/
+          
           echo "Размер IPA:"
-          du -sh $CM_BUILD_DIR/build/ios/ipa/Runner.ipa
+          du -sh Runner.ipa
+          
+          # Проверяем содержимое IPA
+          echo "Содержимое IPA:"
+          unzip -l Runner.ipa | head -10
       - name: Verify artifacts
         script: |
           echo "Проверка артефактов:"
           find $CM_BUILD_DIR -name "*.ipa" -type f -exec du -sh {} \;
           ls -la $CM_BUILD_DIR/build/ios/ipa/
     artifacts:
-      - build/ios/ipa/*.ipa
+      - build/ios/ipa/Runner.ipa
     publishing:
       email:
         recipients:
