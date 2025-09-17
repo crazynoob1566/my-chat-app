@@ -2,18 +2,12 @@ workflows:
   ios-workflow:
     name: iOS Build (Free Account)
     environment:
-      flutter: stable  # Используем стабильную версию
+      flutter: stable
       groups:
         - supabase_credentials
       xcode: latest
       cocoapods: default
     scripts:
-      - name: Debug Flutter version
-        script: |
-          echo "Flutter version:"
-          flutter --version
-          echo "Dart version:"
-          dart --version
       - name: Set up Flutter
         script: |
           flutter config --no-analytics
@@ -22,16 +16,42 @@ workflows:
         script: |
           cd $CM_BUILD_DIR
           flutter pub get
+          # Генерируем необходимые файлы конфигурации
           flutter build ios --config-only --no-codesign
-      - name: Build IPA without code signing
+      - name: Modify Xcode project to disable code signing
+        script: |
+          cd $CM_BUILD_DIR/ios
+          # Отключаем подпись кода в проекте Xcode
+          sed -i '' 's/DEVELOPMENT_TEAM = .*;/DEVELOPMENT_TEAM = "";/g' Runner.xcodeproj/project.pbxproj
+          sed -i '' 's/PROVISIONING_PROFILE_SPECIFIER = .*;/PROVISIONING_PROFILE_SPECIFIER = "";/g' Runner.xcodeproj/project.pbxproj
+          sed -i '' 's/CODE_SIGN_IDENTITY = .*;/CODE_SIGN_IDENTITY = "";/g' Runner.xcodeproj/project.pbxproj
+          sed -i '' 's/CODE_SIGN_STYLE = .*;/CODE_SIGN_STYLE = Manual;/g' Runner.xcodeproj/project.pbxproj
+      - name: Build app without code signing
+        script: |
+          cd $CM_BUILD_DIR/ios
+          # Собираем приложение без подписи
+          xcodebuild clean build \
+            -workspace Runner.xcworkspace \
+            -scheme Runner \
+            -configuration Release \
+            -sdk iphoneos \
+            CODE_SIGN_IDENTITY="" \
+            CODE_SIGNING_REQUIRED=NO \
+            CODE_SIGNING_ALLOWED=NO \
+            DEVELOPMENT_TEAM="" \
+            PROVISIONING_PROFILE_SPECIFIER=""
+      - name: Create IPA manually
         script: |
           cd $CM_BUILD_DIR
-          flutter build ipa \
-            --release \
-            --no-codesign \
-            --export-options-plist="$CM_BUILD_DIR/ios/exportOptions.plist"
+          # Создаем структуру папок для IPA
+          mkdir -p Payload
+          cp -r ios/build/Release-iphoneos/Runner.app Payload/
+          # Создаем IPA файл
+          zip -r build/ios/ipa/app.ipa Payload
+          # Удаляем временную папку
+          rm -rf Payload
     artifacts:
-      - build/ios/ipa/*.ipa
+      - build/ios/ipa/app.ipa
     publishing:
       email:
         recipients:
