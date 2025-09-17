@@ -10,32 +10,25 @@ workflows:
       - name: Set up Flutter
         script: |
           flutter packages pub get
-      - name: Generate Flutter files
+      - name: Build iOS app
         script: |
           cd $CM_BUILD_DIR
-          flutter pub get
-          flutter build ios --config-only --no-codesign
-      - name: Manual IPA creation
+          flutter build ios --release --no-codesign
+      - name: Create IPA from Flutter build
         script: |
-          cd $CM_BUILD_DIR/ios
-          
-          # Собираем приложение без архивирования
-          xcodebuild -workspace Runner.xcworkspace -scheme Runner -configuration Release -sdk iphoneos CODE_SIGN_IDENTITY="" CODE_SIGNING_REQUIRED=NO CODE_SIGNING_ALLOWED=NO
-          
-          # Создаем структуру IPA вручную
+          cd $CM_BUILD_DIR/build/ios/iphoneos
           mkdir -p Payload
-          cp -r build/Release-iphoneos/Runner.app Payload/
+          cp -r Runner.app Payload/
           zip -r Runner.ipa Payload
-          rm -rf Payload
-          
-          # Копируем IPA в нужное место
           mkdir -p $CM_BUILD_DIR/build/ios/ipa
           cp Runner.ipa $CM_BUILD_DIR/build/ios/ipa/
+          echo "Размер IPA:"
+          du -sh $CM_BUILD_DIR/build/ios/ipa/Runner.ipa
       - name: Verify artifacts
         script: |
           echo "Проверка артефактов:"
-          find $CM_BUILD_DIR -name "*.ipa" -type f
-          ls -la $CM_BUILD_DIR/build/ios/ipa/ || echo "Папка ipa не существует"
+          find $CM_BUILD_DIR -name "*.ipa" -type f -exec du -sh {} \;
+          ls -la $CM_BUILD_DIR/build/ios/ipa/
     artifacts:
       - build/ios/ipa/*.ipa
     publishing:
