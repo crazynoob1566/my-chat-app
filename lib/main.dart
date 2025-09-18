@@ -2,13 +2,23 @@ import 'dart:io';
 import 'package:flutter/material.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import 'package:intl/intl.dart';
+import 'config.dart'; // Добавьте этот импорт
 
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
 
-  // Загружаем переменные окружения напрямую из системного окружения
-  final supabaseUrl = Platform.environment['SUPABASE_URL'] ?? '';
-  final supabaseAnonKey = Platform.environment['SUPABASE_ANON_KEY'] ?? '';
+  String supabaseUrl;
+  String supabaseAnonKey;
+
+  // Пытаемся получить переменные из окружения (для Codemagic)
+  supabaseUrl = Platform.environment['SUPABASE_URL'] ?? '';
+  supabaseAnonKey = Platform.environment['SUPABASE_ANON_KEY'] ?? '';
+
+  // Если в окружении нет переменных, используем значения из config.dart
+  if (supabaseUrl.isEmpty || supabaseAnonKey.isEmpty) {
+    supabaseUrl = Config.supabaseUrl;
+    supabaseAnonKey = Config.supabaseAnonKey;
+  }
 
   if (supabaseUrl.isEmpty || supabaseAnonKey.isEmpty) {
     runApp(const ErrorApp(
@@ -29,6 +39,8 @@ Future<void> main() async {
 
   runApp(const MyApp());
 }
+
+// Остальной код без изменений...
 
 class MyApp extends StatelessWidget {
   const MyApp({super.key});
