@@ -187,14 +187,14 @@ class _ChatScreenState extends State<ChatScreen> {
 
       _messageController.clear();
     } catch (e) {
-      // Сохраняем контекст в переменную до асинхронной операции
-      final currentContext = context;
+      // Проверяем, что виджет все еще смонтирован перед использованием контекста
       if (!mounted) return;
 
-      ScaffoldMessenger.of(currentContext).showSnackBar(
+      ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(content: Text('Ошибка отправки: $e')),
       );
     } finally {
+      // Проверяем, что виджет все еще смонтирован перед вызовом setState
       if (mounted) {
         setState(() {
           _isSending = false;
