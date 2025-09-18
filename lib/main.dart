@@ -11,7 +11,6 @@ Future<void> main() async {
   final supabaseAnonKey = Platform.environment['SUPABASE_ANON_KEY'] ?? '';
 
   if (supabaseUrl.isEmpty || supabaseAnonKey.isEmpty) {
-    print('Ошибка: SUPABASE_URL или SUPABASE_ANON_KEY не установлены');
     runApp(const ErrorApp(
         message: 'Ошибка конфигурации: отсутствуют ключи Supabase'));
     return;
@@ -24,7 +23,6 @@ Future<void> main() async {
       anonKey: supabaseAnonKey,
     );
   } catch (e) {
-    print('Ошибка инициализации Supabase: $e');
     runApp(ErrorApp(message: 'Ошибка инициализации Supabase: $e'));
     return;
   }
@@ -43,13 +41,11 @@ class MyApp extends StatelessWidget {
         primarySwatch: Colors.blue,
         useMaterial3: true,
       ),
-      home:
-          const UserSelectionScreen(), // Убедитесь, что используется правильный класс
+      home: const UserSelectionScreen(),
     );
   }
 }
 
-// Добавьте класс UserSelectionScreen, если его нет
 class UserSelectionScreen extends StatelessWidget {
   const UserSelectionScreen({super.key});
 
@@ -106,7 +102,6 @@ class ErrorApp extends StatelessWidget {
   }
 }
 
-// Убедитесь, что класс ChatScreen также присутствует в файле
 class ChatScreen extends StatefulWidget {
   final String currentUserId;
   final String friendId;
@@ -150,7 +145,7 @@ class _ChatScreenState extends State<ChatScreen> {
         _messages = List<Map<String, dynamic>>.from(response);
       });
     } catch (e) {
-      print('Ошибка загрузки сообщений: $e');
+      // Логирование ошибок можно добавить через систему логирования в продакшене
     }
   }
 
@@ -192,14 +187,19 @@ class _ChatScreenState extends State<ChatScreen> {
 
       _messageController.clear();
     } catch (e) {
-      print('Ошибка отправки сообщения: $e');
-      ScaffoldMessenger.of(context).showSnackBar(
+      // Сохраняем контекст в переменную до асинхронной операции
+      final currentContext = context;
+      if (!mounted) return;
+
+      ScaffoldMessenger.of(currentContext).showSnackBar(
         SnackBar(content: Text('Ошибка отправки: $e')),
       );
     } finally {
-      setState(() {
-        _isSending = false;
-      });
+      if (mounted) {
+        setState(() {
+          _isSending = false;
+        });
+      }
     }
   }
 

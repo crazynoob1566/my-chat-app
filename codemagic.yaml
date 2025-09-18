@@ -8,30 +8,18 @@ workflows:
     scripts:
       - name: Set up Flutter
         script: |
-          echo "Настройка Flutter..."
           flutter packages pub get
       - name: Build iOS app
         script: |
-          echo "Сборка iOS приложения..."
           cd $CM_BUILD_DIR
           flutter build ios --release --no-codesign
       - name: Create IPA
         script: |
-          echo "Создание IPA файла..."
           cd $CM_BUILD_DIR
-          
-          # Создаем папку для IPA
           mkdir -p build/ios/ipa/Payload
-          
-          # Копируем приложение
           cp -R build/ios/iphoneos/Runner.app build/ios/ipa/Payload/
-          
-          # Создаем IPA
           cd build/ios/ipa
           zip -r Runner.ipa Payload
-          
-          echo "Размер IPA:"
-          du -sh Runner.ipa
     artifacts:
       - build/ios/ipa/Runner.ipa
     publishing:
