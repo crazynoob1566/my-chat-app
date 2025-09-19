@@ -17,7 +17,6 @@ dependencies:
   flutter_local_notifications: ^16.3.0
   image_picker: ^1.0.4
   cached_network_image: ^3.3.0
-  file_picker: ^5.5.0
   mime: ^1.0.4
   path_provider: ^2.1.1
   image: ^4.1.4

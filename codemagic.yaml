@@ -6,8 +6,9 @@ workflows:
         - supabase_credentials
       xcode: latest
     scripts:
-      - name: Set up Flutter
+      - name: Clean and setup
         script: |
+          flutter clean
           flutter packages pub get
       - name: Build iOS app
         script: |
