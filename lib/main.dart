@@ -1,16 +1,25 @@
 import 'dart:async';
 import 'dart:convert';
 import 'dart:io';
+import 'dart:typed_data';
 import 'package:flutter/material.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import 'package:intl/intl.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:flutter_local_notifications/flutter_local_notifications.dart';
+import 'package:image_picker/image_picker.dart';
+import 'package:cached_network_image/cached_network_image.dart';
+import 'package:file_picker/file_picker.dart';
+import 'package:mime/mime.dart';
+import 'package:path_provider/path_provider.dart';
+import 'package:image/image.dart' as img;
 
 // Конфигурационные константы - замените на ваши реальные значения
 const String _defaultSupabaseUrl = 'https://tpwjupuaflpswdvudexi.supabase.co';
 const String _defaultSupabaseAnonKey =
     'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InRwd2p1cHVhZmxwc3dkdnVkZXhpIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NTgwMzk2NDAsImV4cCI6MjA3MzYxNTY0MH0.hKSB7GHtUWS1Jyyo5pGiCe2wX2OBvyywbbG7kjo62fo';
+const String _supabaseStorageBucket =
+    'chat-images'; // Создайте этот бакет в Supabase Storage
 
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
@@ -156,9 +165,11 @@ class _ChatScreenState extends State<ChatScreen> with WidgetsBindingObserver {
   final Future<SharedPreferences> _prefs = SharedPreferences.getInstance();
   final FlutterLocalNotificationsPlugin _notificationsPlugin =
       FlutterLocalNotificationsPlugin();
+  final ImagePicker _imagePicker = ImagePicker();
 
   List<Map<String, dynamic>> _messages = [];
   bool _isSending = false;
+  bool _isUploadingImage = false;
   Timer? _backgroundTimer;
 
   @override
@@ -295,9 +306,12 @@ class _ChatScreenState extends State<ChatScreen> with WidgetsBindingObserver {
 
               // Показываем уведомление для новых сообщений
               if (newMessage['sender_id'] != widget.currentUserId) {
+                final messageContent = newMessage['type'] == 'image'
+                    ? '📷 Фото'
+                    : newMessage['content'];
                 _showNotification(
                   'Новое сообщение',
-                  newMessage['content'],
+                  messageContent,
                 );
               }
             }
@@ -365,6 +379,7 @@ class _ChatScreenState extends State<ChatScreen> with WidgetsBindingObserver {
         'sender_id': widget.currentUserId,
         'receiver_id': widget.friendId,
         'content': content,
+        'type': 'text',
       });
 
       _messageController.clear();
@@ -382,6 +397,134 @@ class _ChatScreenState extends State<ChatScreen> with WidgetsBindingObserver {
           _isSending = false;
         });
       }
+    }
+  }
+
+  Future<void> _sendImageMessage(String imageUrl) async {
+    try {
+      await _supabase.from('messages').insert({
+        'sender_id': widget.currentUserId,
+        'receiver_id': widget.friendId,
+        'content': imageUrl,
+        'type': 'image',
+      });
+    } catch (e) {
+      if (!mounted) return;
+
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('Ошибка отправки изображения: $e')),
+      );
+    }
+  }
+
+  Future<String?> _uploadImage(XFile imageFile) async {
+    try {
+      setState(() {
+        _isUploadingImage = true;
+      });
+
+      // Читаем файл
+      final bytes = await imageFile.readAsBytes();
+
+      // Генерируем уникальное имя файла
+      final timestamp = DateTime.now().millisecondsSinceEpoch;
+      final fileExtension = imageFile.path.split('.').last;
+      final fileName = '${widget.currentUserId}_$timestamp.$fileExtension';
+
+      // Загружаем в Supabase Storage
+      final response = await _supabase.storage
+          .from(_supabaseStorageBucket)
+          .uploadBinary(fileName, bytes);
+
+      // Получаем публичный URL
+      final imageUrl =
+          _supabase.storage.from(_supabaseStorageBucket).getPublicUrl(fileName);
+
+      return imageUrl;
+    } catch (e) {
+      if (!mounted) return null;
+
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('Ошибка загрузки изображения: $e')),
+      );
+      return null;
+    } finally {
+      if (mounted) {
+        setState(() {
+          _isUploadingImage = false;
+        });
+      }
+    }
+  }
+
+  Future<void> _pickImage() async {
+    try {
+      final XFile? imageFile = await _imagePicker.pickImage(
+        source: ImageSource.gallery,
+        imageQuality: 70,
+        maxWidth: 1440,
+      );
+
+      if (imageFile != null) {
+        final imageUrl = await _uploadImage(imageFile);
+        if (imageUrl != null) {
+          await _sendImageMessage(imageUrl);
+        }
+      }
+    } catch (e) {
+      if (!mounted) return;
+
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('Ошибка выбора изображения: $e')),
+      );
+    }
+  }
+
+  Future<void> _takePhoto() async {
+    try {
+      final XFile? imageFile = await _imagePicker.pickImage(
+        source: ImageSource.camera,
+        imageQuality: 70,
+        maxWidth: 1440,
+      );
+
+      if (imageFile != null) {
+        final imageUrl = await _uploadImage(imageFile);
+        if (imageUrl != null) {
+          await _sendImageMessage(imageUrl);
+        }
+      }
+    } catch (e) {
+      if (!mounted) return;
+
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnashowSnackBar(content: Text('Ошибка съемки фото: $e')),
+      );
+    }
+  }
+
+  Widget _buildMessageBubble(Map<String, dynamic> message) {
+    final isMe = message['sender_id'] == widget.currentUserId;
+    final isImage = message['type'] == 'image';
+
+    if (isImage) {
+      // Сообщение с изображением
+      return ImageMessageBubble(
+        imageUrl: message['content'],
+        isMe: isMe,
+        time: DateFormat('HH:mm').format(
+          DateTime.parse(message['created_at']).toLocal(),
+        ),
+      );
+    } else {
+      // Текстовое сообщение
+      return MessageBubble(
+        message: message['content'],
+        isMe: isMe,
+        time: DateFormat('HH:mm').format(
+          DateTime.parse(message['created_at']).toLocal(),
+        ),
+      );
     }
   }
 
@@ -411,22 +554,25 @@ class _ChatScreenState extends State<ChatScreen> with WidgetsBindingObserver {
                     itemCount: _messages.length,
                     itemBuilder: (context, index) {
                       final message = _messages[index];
-                      final isMe = message['sender_id'] == widget.currentUserId;
-
-                      return MessageBubble(
-                        message: message['content'],
-                        isMe: isMe,
-                        time: DateFormat('HH:mm').format(
-                          DateTime.parse(message['created_at']).toLocal(),
-                        ),
-                      );
+                      return _buildMessageBubble(message);
                     },
                   ),
           ),
+          if (_isUploadingImage) const LinearProgressIndicator(),
           Padding(
             padding: const EdgeInsets.all(8.0),
             child: Row(
               children: [
+                IconButton(
+                  icon: const Icon(Icons.photo_library),
+                  onPressed: _pickImage,
+                  tooltip: 'Выбрать из галереи',
+                ),
+                IconButton(
+                  icon: const Icon(Icons.camera_alt),
+                  onPressed: _takePhoto,
+                  tooltip: 'Сделать фото',
+                ),
                 Expanded(
                   child: TextField(
                     controller: _messageController,
@@ -500,6 +646,70 @@ class MessageBubble extends StatelessWidget {
               style: TextStyle(
                 fontSize: 10,
                 color: isMe ? Colors.white70 : Colors.grey[600],
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+class ImageMessageBubble extends StatelessWidget {
+  final String imageUrl;
+  final bool isMe;
+  final String time;
+
+  const ImageMessageBubble({
+    super.key,
+    required this.imageUrl,
+    required this.isMe,
+    required this.time,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return Align(
+      alignment: isMe ? Alignment.centerRight : Alignment.centerLeft,
+      child: Container(
+        margin: const EdgeInsets.symmetric(vertical: 4),
+        constraints: const BoxConstraints(maxWidth: 250),
+        decoration: BoxDecoration(
+          color: isMe ? Colors.blue : Colors.grey[300],
+          borderRadius: BorderRadius.circular(16),
+        ),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.end,
+          children: [
+            ClipRRect(
+              borderRadius: BorderRadius.circular(12),
+              child: CachedNetworkImage(
+                imageUrl: imageUrl,
+                placeholder: (context, url) => Container(
+                  width: 200,
+                  height: 200,
+                  color: Colors.grey[200],
+                  child: const Center(child: CircularProgressIndicator()),
+                ),
+                errorWidget: (context, url, error) => Container(
+                  width: 200,
+                  height: 200,
+                  color: Colors.grey[200],
+                  child: const Icon(Icons.error),
+                ),
+                fit: BoxFit.cover,
+                width: 200,
+                height: 200,
+              ),
+            ),
+            Padding(
+              padding: const EdgeInsets.all(8.0),
+              child: Text(
+                time,
+                style: TextStyle(
+                  fontSize: 10,
+                  color: isMe ? Colors.white70 : Colors.grey[600],
+                ),
               ),
             ),
           ],
