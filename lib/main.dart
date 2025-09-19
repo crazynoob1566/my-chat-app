@@ -425,19 +425,26 @@ class _ChatScreenState extends State<ChatScreen> with WidgetsBindingObserver {
       // Читаем файл
       final bytes = await imageFile.readAsBytes();
 
+      // Определяем MIME-тип
+      final mimeType = lookupMimeType(imageFile.path);
+
       // Генерируем уникальное имя файла
       final timestamp = DateTime.now().millisecondsSinceEpoch;
       final fileExtension = imageFile.path.split('.').last;
       final fileName = '${widget.currentUserId}_$timestamp.$fileExtension';
 
-      // Загружаем в Supabase Storage
-      final response = await _supabase.storage
-          .from(_supabaseStorageBucket)
-          .uploadBinary(fileName, bytes);
+      // Загружаем в Supabase Storage с указанием MIME-типа
+      await _supabase.storage.from('chat-images').uploadBinary(
+            fileName,
+            bytes,
+            fileOptions: FileOptions(
+              contentType: mimeType ?? 'image/jpeg',
+            ),
+          );
 
       // Получаем публичный URL
       final imageUrl =
-          _supabase.storage.from(_supabaseStorageBucket).getPublicUrl(fileName);
+          _supabase.storage.from('chat-images').getPublicUrl(fileName);
 
       return imageUrl;
     } catch (e) {
