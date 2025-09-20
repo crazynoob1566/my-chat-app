@@ -12,6 +12,8 @@ import 'package:cached_network_image/cached_network_image.dart';
 import 'package:mime/mime.dart';
 import 'package:path_provider/path_provider.dart';
 import 'package:image/image.dart' as img;
+import 'package:photo_view/photo_view.dart'; // Для полноэкранного просмотра
+import 'package:transparent_image/transparent_image.dart'; // Для placeholder
 
 // Конфигурационные константы - замените на ваши реальные значения
 const String _defaultSupabaseUrl = 'https://tpwjupuaflpswdvudexi.supabase.co';
@@ -429,9 +431,9 @@ class _ChatScreenState extends State<ChatScreen> with WidgetsBindingObserver {
       final mimeType = lookupMimeType(imageFile.path);
 
       // Генерируем уникальное имя файла
-      final timestamptz = DateTime.now().millisecondsSinceEpoch;
+      final timestamp = DateTime.now().millisecondsSinceEpoch;
       final fileExtension = imageFile.path.split('.').last;
-      final fileName = '${widget.currentUserId}_$timestamptz.$fileExtension';
+      final fileName = '${widget.currentUserId}_$timestamp.$fileExtension';
 
       // Загружаем в Supabase Storage с указанием MIME-типа
       await _supabase.storage.from('chat-images').uploadBinary(
@@ -673,6 +675,76 @@ class ImageMessageBubble extends StatelessWidget {
     required this.time,
   });
 
+  void _showFullScreenImage(BuildContext context) {
+    Navigator.of(context).push(
+      MaterialPageRoute(
+        builder: (context) => Scaffold(
+          backgroundColor: Colors.black,
+          appBar: AppBar(
+            backgroundColor: Colors.black,
+            leading: IconButton(
+              icon: const Icon(Icons.arrow_back, color: Colors.white),
+              onPressed: () => Navigator.of(context).pop(),
+            ),
+            actions: [
+              IconButton(
+                icon: const Icon(Icons.download, color: Colors.white),
+                onPressed: () => _downloadImage(context, imageUrl),
+              ),
+            ],
+          ),
+          body: Center(
+            child: PhotoView(
+              imageProvider: NetworkImage(imageUrl),
+              minScale: PhotoViewComputedScale.contained,
+              maxScale: PhotoViewComputedScale.covered * 4,
+              heroAttributes: PhotoViewHeroAttributes(tag: imageUrl),
+              loadingBuilder: (context, event) => Center(
+                child: Container(
+                  width: 100,
+                  height: 100,
+                  child: const CircularProgressIndicator(),
+                ),
+              ),
+              errorBuilder: (context, error, stackTrace) => Center(
+                child: Column(
+                  mainAxisAlignment: MainAxisAlignment.center,
+                  children: [
+                    const Icon(Icons.error, color: Colors.white, size: 50),
+                    const SizedBox(height: 16),
+                    const Text(
+                      'Не удалось загрузить изображение',
+                      style: TextStyle(color: Colors.white),
+                    ),
+                    const SizedBox(height: 8),
+                    TextButton(
+                      onPressed: () => Navigator.of(context).pop(),
+                      child: const Text('Назад',
+                          style: TextStyle(color: Colors.white)),
+                    ),
+                  ],
+                ),
+              ),
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+
+  Future<void> _downloadImage(BuildContext context, String url) async {
+    try {
+      // Здесь можно добавить функционал сохранения изображения
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Функция сохранения в разработке')),
+      );
+    } catch (e) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('Ошибка сохранения: $e')),
+      );
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
     return Align(
@@ -687,25 +759,57 @@ class ImageMessageBubble extends StatelessWidget {
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.end,
           children: [
-            ClipRRect(
-              borderRadius: BorderRadius.circular(12),
-              child: CachedNetworkImage(
-                imageUrl: imageUrl,
-                placeholder: (context, url) => Container(
-                  width: 200,
-                  height: 200,
-                  color: Colors.grey[200],
-                  child: const Center(child: CircularProgressIndicator()),
+            GestureDetector(
+              onTap: () => _showFullScreenImage(context),
+              child: ClipRRect(
+                borderRadius: BorderRadius.circular(12),
+                child: Stack(
+                  children: [
+                    // Placeholder
+                    Container(
+                      width: 200,
+                      height: 200,
+                      color: Colors.grey[200],
+                      child: const Center(child: CircularProgressIndicator()),
+                    ),
+                    // Изображение
+                    CachedNetworkImage(
+                      imageUrl: imageUrl,
+                      placeholder: (context, url) => Container(
+                        width: 200,
+                        height: 200,
+                        color: Colors.grey[200],
+                        child: const Center(child: CircularProgressIndicator()),
+                      ),
+                      errorWidget: (context, url, error) => Container(
+                        width: 200,
+                        height: 200,
+                        color: Colors.grey[200],
+                        child: const Icon(Icons.error),
+                      ),
+                      fit: BoxFit.cover,
+                      width: 200,
+                      height: 200,
+                    ),
+                    // Иконка полноэкранного просмотра
+                    Positioned(
+                      top: 8,
+                      right: 8,
+                      child: Container(
+                        padding: const EdgeInsets.all(4),
+                        decoration: BoxDecoration(
+                          color: Colors.black.withOpacity(0.5),
+                          shape: BoxShape.circle,
+                        ),
+                        child: const Icon(
+                          Icons.fullscreen,
+                          color: Colors.white,
+                          size: 16,
+                        ),
+                      ),
+                    ),
+                  ],
                 ),
-                errorWidget: (context, url, error) => Container(
-                  width: 200,
-                  height: 200,
-                  color: Colors.grey[200],
-                  child: const Icon(Icons.error),
-                ),
-                fit: BoxFit.cover,
-                width: 200,
-                height: 200,
               ),
             ),
             Padding(
@@ -716,6 +820,39 @@ class ImageMessageBubble extends StatelessWidget {
                   fontSize: 10,
                   color: isMe ? Colors.white70 : Colors.grey[600],
                 ),
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+class FullScreenImageScreen extends StatelessWidget {
+  final String imageUrl;
+
+  const FullScreenImageScreen({super.key, required this.imageUrl});
+
+  @override
+  Widget build(BuildContext context) {
+    return Scaffold(
+      backgroundColor: Colors.black,
+      body: SafeArea(
+        child: Stack(
+          children: [
+            PhotoView(
+              imageProvider: NetworkImage(imageUrl),
+              minScale: PhotoViewComputedScale.contained,
+              maxScale: PhotoViewComputedScale.covered * 4,
+              heroAttributes: PhotoViewHeroAttributes(tag: imageUrl),
+            ),
+            Positioned(
+              top: 16,
+              left: 16,
+              child: IconButton(
+                icon: const Icon(Icons.arrow_back, color: Colors.white),
+                onPressed: () => Navigator.of(context).pop(),
               ),
             ),
           ],
