@@ -17,12 +17,25 @@ import 'package:permission_handler/permission_handler.dart';
 import 'package:http/http.dart' as http;
 import 'dart:async';
 
-// Конфигурационные константы - замените на ваши реальные значения
+// Конфигурационные константы
 const String _defaultSupabaseUrl = 'https://tpwjupuaflpswdvudexi.supabase.co';
 const String _defaultSupabaseAnonKey =
     'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InRwd2p1cHVhZmxwc3dkdnVkZXhpIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NTgwMzk2NDAsImV4cCI6MjA3MzYxNTY0MH0.hKSB7GHtUWS1Jyyo5pGiCe2wX2OBvyywbbG7kjo62fo';
-const String _supabaseStorageBucket =
-    'chat-images'; // Создайте этот бакет в Supabase Storage
+const String _supabaseStorageBucket = 'chat-images';
+
+// Информация о пользователях
+final Map<String, Map<String, dynamic>> users = {
+  'user1': {
+    'name': 'Анна',
+    'avatarColor': Colors.purple,
+    'avatarText': 'А',
+  },
+  'user2': {
+    'name': 'Максим',
+    'avatarColor': Colors.blue,
+    'avatarText': 'М',
+  },
+};
 
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
@@ -110,7 +123,7 @@ class UserSelectionScreen extends StatelessWidget {
                       currentUserId: 'user1', friendId: 'user2'),
                 ),
               ),
-              child: const Text('Я - User 1'),
+              child: Text('Я - ${users['user1']!['name']}'),
             ),
             const SizedBox(height: 20),
             ElevatedButton(
@@ -121,7 +134,7 @@ class UserSelectionScreen extends StatelessWidget {
                       currentUserId: 'user2', friendId: 'user1'),
                 ),
               ),
-              child: const Text('Я - User 2'),
+              child: Text('Я - ${users['user2']!['name']}'),
             ),
           ],
         ),
@@ -339,7 +352,7 @@ class _ChatScreenState extends State<ChatScreen> with WidgetsBindingObserver {
                     ? '📷 Фото'
                     : newMessage['content'];
                 _showNotification(
-                  'Новое сообщение',
+                  'Новое сообщение от ${users[newMessage['sender_id']]!['name']}',
                   messageContent,
                 );
               }
@@ -547,6 +560,12 @@ class _ChatScreenState extends State<ChatScreen> with WidgetsBindingObserver {
   Widget _buildMessageBubble(Map<String, dynamic> message) {
     final isMe = message['sender_id'] == widget.currentUserId;
     final isImage = message['type'] == 'image';
+    final userInfo = users[message['sender_id']] ??
+        {
+          'name': message['sender_id'],
+          'avatarColor': Colors.grey,
+          'avatarText': '?'
+        };
 
     if (isImage) {
       // Сообщение с изображением
@@ -556,6 +575,7 @@ class _ChatScreenState extends State<ChatScreen> with WidgetsBindingObserver {
         time: DateFormat('HH:mm').format(
           DateTime.parse(message['created_at']).toLocal(),
         ),
+        userInfo: userInfo,
       );
     } else {
       // Текстовое сообщение
@@ -565,15 +585,35 @@ class _ChatScreenState extends State<ChatScreen> with WidgetsBindingObserver {
         time: DateFormat('HH:mm').format(
           DateTime.parse(message['created_at']).toLocal(),
         ),
+        userInfo: userInfo,
       );
     }
   }
 
   @override
   Widget build(BuildContext context) {
+    final friendInfo = users[widget.friendId] ??
+        {
+          'name': widget.friendId,
+          'avatarColor': Colors.grey,
+          'avatarText': '?'
+        };
+
     return Scaffold(
       appBar: AppBar(
-        title: Text('Чат с ${widget.friendId}'),
+        title: Row(
+          children: [
+            CircleAvatar(
+              backgroundColor: friendInfo['avatarColor'],
+              child: Text(
+                friendInfo['avatarText'],
+                style: const TextStyle(color: Colors.white),
+              ),
+            ),
+            const SizedBox(width: 12),
+            Text('Чат с ${friendInfo['name']}'),
+          ],
+        ),
         leading: IconButton(
           icon: const Icon(Icons.arrow_back),
           onPressed: () => Navigator.pushReplacement(
@@ -654,44 +694,96 @@ class MessageBubble extends StatelessWidget {
   final String message;
   final bool isMe;
   final String time;
+  final Map<String, dynamic> userInfo;
 
   const MessageBubble({
     super.key,
     required this.message,
     required this.isMe,
     required this.time,
+    required this.userInfo,
   });
 
   @override
   Widget build(BuildContext context) {
-    return Align(
-      alignment: isMe ? Alignment.centerRight : Alignment.centerLeft,
-      child: Container(
-        margin: const EdgeInsets.symmetric(vertical: 4),
-        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
-        decoration: BoxDecoration(
-          color: isMe ? Colors.blue : Colors.grey[300],
-          borderRadius: BorderRadius.circular(16),
-        ),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.end,
-          children: [
-            Text(
-              message,
-              style: TextStyle(
-                color: isMe ? Colors.white : Colors.black,
+    return Padding(
+      padding: const EdgeInsets.symmetric(vertical: 4),
+      child: Row(
+        mainAxisAlignment:
+            isMe ? MainAxisAlignment.end : MainAxisAlignment.start,
+        crossAxisAlignment: CrossAxisAlignment.end,
+        children: [
+          if (!isMe) // Аватарка только для собеседника
+            Padding(
+              padding: const EdgeInsets.only(right: 8),
+              child: CircleAvatar(
+                backgroundColor: userInfo['avatarColor'],
+                child: Text(
+                  userInfo['avatarText'],
+                  style: const TextStyle(color: Colors.white),
+                ),
               ),
             ),
-            const SizedBox(height: 4),
-            Text(
-              time,
-              style: TextStyle(
-                fontSize: 10,
-                color: isMe ? Colors.white70 : Colors.grey[600],
+          Flexible(
+            child: Column(
+              crossAxisAlignment:
+                  isMe ? CrossAxisAlignment.end : CrossAxisAlignment.start,
+              children: [
+                if (!isMe) // Имя отправителя только для сообщений собеседника
+                  Padding(
+                    padding: const EdgeInsets.only(bottom: 4, left: 12),
+                    child: Text(
+                      userInfo['name'],
+                      style: const TextStyle(
+                        fontSize: 12,
+                        fontWeight: FontWeight.w500,
+                        color: Colors.grey,
+                      ),
+                    ),
+                  ),
+                Container(
+                  padding:
+                      const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
+                  decoration: BoxDecoration(
+                    color: isMe ? Colors.blue : Colors.grey[300],
+                    borderRadius: BorderRadius.circular(16),
+                  ),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.end,
+                    children: [
+                      Text(
+                        message,
+                        style: TextStyle(
+                          color: isMe ? Colors.white : Colors.black,
+                        ),
+                      ),
+                      const SizedBox(height: 4),
+                      Text(
+                        time,
+                        style: TextStyle(
+                          fontSize: 10,
+                          color: isMe ? Colors.white70 : Colors.grey[600],
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+              ],
+            ),
+          ),
+          if (isMe) // Аватарка для своих сообщений
+            Padding(
+              padding: const EdgeInsets.only(left: 8),
+              child: CircleAvatar(
+                backgroundColor: Colors.blue,
+                radius: 12,
+                child: Text(
+                  userInfo['avatarText'],
+                  style: const TextStyle(color: Colors.white, fontSize: 10),
+                ),
               ),
             ),
-          ],
-        ),
+        ],
       ),
     );
   }
@@ -701,12 +793,14 @@ class ImageMessageBubble extends StatelessWidget {
   final String imageUrl;
   final bool isMe;
   final String time;
+  final Map<String, dynamic> userInfo;
 
   const ImageMessageBubble({
     super.key,
     required this.imageUrl,
     required this.isMe,
     required this.time,
+    required this.userInfo,
   });
 
   void _showFullScreenImage(BuildContext context) {
@@ -719,83 +813,134 @@ class ImageMessageBubble extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return Align(
-      alignment: isMe ? Alignment.centerRight : Alignment.centerLeft,
-      child: Container(
-        margin: const EdgeInsets.symmetric(vertical: 4),
-        constraints: const BoxConstraints(maxWidth: 250),
-        decoration: BoxDecoration(
-          color: isMe ? Colors.blue : Colors.grey[300],
-          borderRadius: BorderRadius.circular(16),
-        ),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.end,
-          children: [
-            GestureDetector(
-              onTap: () => _showFullScreenImage(context),
-              child: ClipRRect(
-                borderRadius: BorderRadius.circular(12),
-                child: Stack(
-                  children: [
-                    // Placeholder
-                    Container(
-                      width: 200,
-                      height: 200,
-                      color: Colors.grey[200],
-                      child: const Center(child: CircularProgressIndicator()),
-                    ),
-                    // Изображение
-                    CachedNetworkImage(
-                      imageUrl: imageUrl,
-                      placeholder: (context, url) => Container(
-                        width: 200,
-                        height: 200,
-                        color: Colors.grey[200],
-                        child: const Center(child: CircularProgressIndicator()),
-                      ),
-                      errorWidget: (context, url, error) => Container(
-                        width: 200,
-                        height: 200,
-                        color: Colors.grey[200],
-                        child: const Icon(Icons.error),
-                      ),
-                      fit: BoxFit.cover,
-                      width: 200,
-                      height: 200,
-                    ),
-                    // Иконка полноэкранного просмотра
-                    Positioned(
-                      top: 8,
-                      right: 8,
-                      child: Container(
-                        padding: const EdgeInsets.all(4),
-                        decoration: BoxDecoration(
-                          color: Colors.black.withOpacity(0.5),
-                          shape: BoxShape.circle,
-                        ),
-                        child: const Icon(
-                          Icons.fullscreen,
-                          color: Colors.white,
-                          size: 16,
-                        ),
-                      ),
-                    ),
-                  ],
-                ),
-              ),
-            ),
+    return Padding(
+      padding: const EdgeInsets.symmetric(vertical: 4),
+      child: Row(
+        mainAxisAlignment:
+            isMe ? MainAxisAlignment.end : MainAxisAlignment.start,
+        crossAxisAlignment: CrossAxisAlignment.end,
+        children: [
+          if (!isMe) // Аватарка только для собеседника
             Padding(
-              padding: const EdgeInsets.all(8.0),
-              child: Text(
-                time,
-                style: TextStyle(
-                  fontSize: 10,
-                  color: isMe ? Colors.white70 : Colors.grey[600],
+              padding: const EdgeInsets.only(right: 8),
+              child: CircleAvatar(
+                backgroundColor: userInfo['avatarColor'],
+                child: Text(
+                  userInfo['avatarText'],
+                  style: const TextStyle(color: Colors.white),
                 ),
               ),
             ),
-          ],
-        ),
+          Flexible(
+            child: Column(
+              crossAxisAlignment:
+                  isMe ? CrossAxisAlignment.end : CrossAxisAlignment.start,
+              children: [
+                if (!isMe) // Имя отправителя только для сообщений собеседника
+                  Padding(
+                    padding: const EdgeInsets.only(bottom: 4, left: 12),
+                    child: Text(
+                      userInfo['name'],
+                      style: const TextStyle(
+                        fontSize: 12,
+                        fontWeight: FontWeight.w500,
+                        color: Colors.grey,
+                      ),
+                    ),
+                  ),
+                Container(
+                  constraints: const BoxConstraints(maxWidth: 250),
+                  decoration: BoxDecoration(
+                    color: isMe ? Colors.blue : Colors.grey[300],
+                    borderRadius: BorderRadius.circular(16),
+                  ),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.end,
+                    children: [
+                      GestureDetector(
+                        onTap: () => _showFullScreenImage(context),
+                        child: ClipRRect(
+                          borderRadius: BorderRadius.circular(12),
+                          child: Stack(
+                            children: [
+                              // Placeholder
+                              Container(
+                                width: 200,
+                                height: 200,
+                                color: Colors.grey[200],
+                                child: const Center(
+                                    child: CircularProgressIndicator()),
+                              ),
+                              // Изображение
+                              CachedNetworkImage(
+                                imageUrl: imageUrl,
+                                placeholder: (context, url) => Container(
+                                  width: 200,
+                                  height: 200,
+                                  color: Colors.grey[200],
+                                  child: const Center(
+                                      child: CircularProgressIndicator()),
+                                ),
+                                errorWidget: (context, url, error) => Container(
+                                  width: 200,
+                                  height: 200,
+                                  color: Colors.grey[200],
+                                  child: const Icon(Icons.error),
+                                ),
+                                fit: BoxFit.cover,
+                                width: 200,
+                                height: 200,
+                              ),
+                              // Иконка полноэкранного просмотра
+                              Positioned(
+                                top: 8,
+                                right: 8,
+                                child: Container(
+                                  padding: const EdgeInsets.all(4),
+                                  decoration: BoxDecoration(
+                                    color: Colors.black.withOpacity(0.5),
+                                    shape: BoxShape.circle,
+                                  ),
+                                  child: const Icon(
+                                    Icons.fullscreen,
+                                    color: Colors.white,
+                                    size: 16,
+                                  ),
+                                ),
+                              ),
+                            ],
+                          ),
+                        ),
+                      ),
+                      Padding(
+                        padding: const EdgeInsets.all(8.0),
+                        child: Text(
+                          time,
+                          style: TextStyle(
+                            fontSize: 10,
+                            color: isMe ? Colors.white70 : Colors.grey[600],
+                          ),
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+              ],
+            ),
+          ),
+          if (isMe) // Аватарка для своих сообщений
+            Padding(
+              padding: const EdgeInsets.only(left: 8),
+              child: CircleAvatar(
+                backgroundColor: Colors.blue,
+                radius: 12,
+                child: Text(
+                  userInfo['avatarText'],
+                  style: const TextStyle(color: Colors.white, fontSize: 10),
+                ),
+              ),
+            ),
+        ],
       ),
     );
   }
