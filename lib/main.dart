@@ -12,9 +12,9 @@ import 'package:mime/mime.dart';
 import 'package:path_provider/path_provider.dart';
 import 'package:image/image.dart' as img;
 import 'package:photo_view/photo_view.dart';
-import 'package:image_gallery_saver/image_gallery_saver.dart'; // Для сохранения изображений
-import 'package:permission_handler/permission_handler.dart'; // Для запроса разрешений
-import 'package:http/http.dart' as http; // Для загрузки изображений
+import 'package:image_gallery_saver/image_gallery_saver.dart';
+import 'package:permission_handler/permission_handler.dart';
+import 'package:http/http.dart' as http;
 import 'dart:async';
 
 // Конфигурационные константы - замените на ваши реальные значения
@@ -169,6 +169,7 @@ class _ChatScreenState extends State<ChatScreen> with WidgetsBindingObserver {
   final FlutterLocalNotificationsPlugin _notificationsPlugin =
       FlutterLocalNotificationsPlugin();
   final ImagePicker _imagePicker = ImagePicker();
+  final ScrollController _scrollController = ScrollController();
 
   List<Map<String, dynamic>> _messages = [];
   bool _isSending = false;
@@ -191,6 +192,7 @@ class _ChatScreenState extends State<ChatScreen> with WidgetsBindingObserver {
     _stopBackgroundTask();
     WidgetsBinding.instance.removeObserver(this);
     _messageController.dispose();
+    _scrollController.dispose();
     _supabase.removeChannel(_messagesChannel);
     super.dispose();
   }
@@ -206,6 +208,20 @@ class _ChatScreenState extends State<ChatScreen> with WidgetsBindingObserver {
       _stopBackgroundTask();
       _loadMessages();
       _subscribeToMessages();
+    }
+  }
+
+  void _scrollToBottom() {
+    if (_scrollController.hasClients) {
+      final double position = _scrollController.position.maxScrollExtent;
+      if (position > 0) {
+        _scrollController.jumpTo(position);
+      }
+    } else {
+      // Если контроллер еще не готов, пробуем снова через короткое время
+      Future.delayed(const Duration(milliseconds: 100), () {
+        _scrollToBottom();
+      });
     }
   }
 
@@ -282,6 +298,11 @@ class _ChatScreenState extends State<ChatScreen> with WidgetsBindingObserver {
 
       // Сохраняем сообщения локально
       await _saveMessagesLocally();
+
+      // Прокручиваем к последнему сообщению после загрузки
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        _scrollToBottom();
+      });
     } catch (e) {
       // В случае ошибки используем кэшированные сообщения
       print('Ошибка загрузки сообщений: $e');
@@ -306,6 +327,11 @@ class _ChatScreenState extends State<ChatScreen> with WidgetsBindingObserver {
 
               // Сохраняем обновленный список сообщений локально
               await _saveMessagesLocally();
+
+              // Прокручиваем к последнему сообщению
+              WidgetsBinding.instance.addPostFrameCallback((_) {
+                _scrollToBottom();
+              });
 
               // Показываем уведомление для новых сообщений
               if (newMessage['sender_id'] != widget.currentUserId) {
@@ -357,6 +383,11 @@ class _ChatScreenState extends State<ChatScreen> with WidgetsBindingObserver {
         });
 
         await _saveMessagesLocally();
+
+        // Прокручиваем к последнему сообщению
+        WidgetsBinding.instance.addPostFrameCallback((_) {
+          _scrollToBottom();
+        });
 
         // Показываем уведомление
         _showNotification(
@@ -560,6 +591,7 @@ class _ChatScreenState extends State<ChatScreen> with WidgetsBindingObserver {
                     child: Text('Нет сообщений'),
                   )
                 : ListView.builder(
+                    controller: _scrollController,
                     padding: const EdgeInsets.all(8),
                     itemCount: _messages.length,
                     itemBuilder: (context, index) {
