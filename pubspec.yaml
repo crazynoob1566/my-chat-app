@@ -20,8 +20,10 @@ dependencies:
   mime: ^1.0.4
   path_provider: ^2.1.1
   image: ^4.1.4
-  photo_view: ^0.14.0  # Для полноэкранного просмотра изображений
-  transparent_image: ^2.0.1  # Для placeholder при загрузке изображений
+  photo_view: ^0.14.0
+  image_gallery_saver: ^2.0.3  # Для сохранения изображений
+  permission_handler: ^11.0.1  # Для запроса разрешений
+  http: ^1.1.0  # Для загрузки изображений по URL
 
 dev_dependencies:
   flutter_test:

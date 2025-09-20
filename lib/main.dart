@@ -1,6 +1,5 @@
-import 'dart:async';
-import 'dart:convert';
 import 'dart:io';
+import 'dart:convert';
 import 'dart:typed_data';
 import 'package:flutter/material.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
@@ -12,8 +11,11 @@ import 'package:cached_network_image/cached_network_image.dart';
 import 'package:mime/mime.dart';
 import 'package:path_provider/path_provider.dart';
 import 'package:image/image.dart' as img;
-import 'package:photo_view/photo_view.dart'; // Для полноэкранного просмотра
-import 'package:transparent_image/transparent_image.dart'; // Для placeholder
+import 'package:photo_view/photo_view.dart';
+import 'package:image_gallery_saver/image_gallery_saver.dart'; // Для сохранения изображений
+import 'package:permission_handler/permission_handler.dart'; // Для запроса разрешений
+import 'package:http/http.dart' as http; // Для загрузки изображений
+import 'dart:async';
 
 // Конфигурационные константы - замените на ваши реальные значения
 const String _defaultSupabaseUrl = 'https://tpwjupuaflpswdvudexi.supabase.co';
@@ -678,71 +680,9 @@ class ImageMessageBubble extends StatelessWidget {
   void _showFullScreenImage(BuildContext context) {
     Navigator.of(context).push(
       MaterialPageRoute(
-        builder: (context) => Scaffold(
-          backgroundColor: Colors.black,
-          appBar: AppBar(
-            backgroundColor: Colors.black,
-            leading: IconButton(
-              icon: const Icon(Icons.arrow_back, color: Colors.white),
-              onPressed: () => Navigator.of(context).pop(),
-            ),
-            actions: [
-              IconButton(
-                icon: const Icon(Icons.download, color: Colors.white),
-                onPressed: () => _downloadImage(context, imageUrl),
-              ),
-            ],
-          ),
-          body: Center(
-            child: PhotoView(
-              imageProvider: NetworkImage(imageUrl),
-              minScale: PhotoViewComputedScale.contained,
-              maxScale: PhotoViewComputedScale.covered * 4,
-              heroAttributes: PhotoViewHeroAttributes(tag: imageUrl),
-              loadingBuilder: (context, event) => Center(
-                child: Container(
-                  width: 100,
-                  height: 100,
-                  child: const CircularProgressIndicator(),
-                ),
-              ),
-              errorBuilder: (context, error, stackTrace) => Center(
-                child: Column(
-                  mainAxisAlignment: MainAxisAlignment.center,
-                  children: [
-                    const Icon(Icons.error, color: Colors.white, size: 50),
-                    const SizedBox(height: 16),
-                    const Text(
-                      'Не удалось загрузить изображение',
-                      style: TextStyle(color: Colors.white),
-                    ),
-                    const SizedBox(height: 8),
-                    TextButton(
-                      onPressed: () => Navigator.of(context).pop(),
-                      child: const Text('Назад',
-                          style: TextStyle(color: Colors.white)),
-                    ),
-                  ],
-                ),
-              ),
-            ),
-          ),
-        ),
+        builder: (context) => FullScreenImageScreen(imageUrl: imageUrl),
       ),
     );
-  }
-
-  Future<void> _downloadImage(BuildContext context, String url) async {
-    try {
-      // Здесь можно добавить функционал сохранения изображения
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Функция сохранения в разработке')),
-      );
-    } catch (e) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('Ошибка сохранения: $e')),
-      );
-    }
   }
 
   @override
@@ -829,10 +769,65 @@ class ImageMessageBubble extends StatelessWidget {
   }
 }
 
-class FullScreenImageScreen extends StatelessWidget {
+class FullScreenImageScreen extends StatefulWidget {
   final String imageUrl;
 
   const FullScreenImageScreen({super.key, required this.imageUrl});
+
+  @override
+  State<FullScreenImageScreen> createState() => _FullScreenImageScreenState();
+}
+
+class _FullScreenImageScreenState extends State<FullScreenImageScreen> {
+  bool _isSaving = false;
+
+  Future<void> _saveImage() async {
+    setState(() {
+      _isSaving = true;
+    });
+
+    try {
+      // Запрашиваем разрешение на доступ к галерее
+      var status = await Permission.photos.request();
+      if (!status.isGranted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+              content:
+                  Text('Необходимо разрешение для сохранения изображений')),
+        );
+        return;
+      }
+
+      // Загружаем изображение
+      final response = await http.get(Uri.parse(widget.imageUrl));
+      final bytes = response.bodyBytes;
+
+      // Сохраняем изображение
+      final result = await ImageGallerySaver.saveImage(
+        Uint8List.fromList(bytes),
+        quality: 100,
+        name: "chat_image_${DateTime.now().millisecondsSinceEpoch}",
+      );
+
+      if (result['isSuccess']) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('Изображение сохранено в галерею')),
+        );
+      } else {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('Не удалось сохранить изображение')),
+        );
+      }
+    } catch (e) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('Ошибка сохранения: $e')),
+      );
+    } finally {
+      setState(() {
+        _isSaving = false;
+      });
+    }
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -842,10 +837,36 @@ class FullScreenImageScreen extends StatelessWidget {
         child: Stack(
           children: [
             PhotoView(
-              imageProvider: NetworkImage(imageUrl),
+              imageProvider: NetworkImage(widget.imageUrl),
               minScale: PhotoViewComputedScale.contained,
               maxScale: PhotoViewComputedScale.covered * 4,
-              heroAttributes: PhotoViewHeroAttributes(tag: imageUrl),
+              heroAttributes: PhotoViewHeroAttributes(tag: widget.imageUrl),
+              loadingBuilder: (context, event) => Center(
+                child: Container(
+                  width: 100,
+                  height: 100,
+                  child: const CircularProgressIndicator(),
+                ),
+              ),
+              errorBuilder: (context, error, stackTrace) => Center(
+                child: Column(
+                  mainAxisAlignment: MainAxisAlignment.center,
+                  children: [
+                    const Icon(Icons.error, color: Colors.white, size: 50),
+                    const SizedBox(height: 16),
+                    const Text(
+                      'Не удалось загрузить изображение',
+                      style: TextStyle(color: Colors.white),
+                    ),
+                    const SizedBox(height: 8),
+                    TextButton(
+                      onPressed: () => Navigator.of(context).pop(),
+                      child: const Text('Назад',
+                          style: TextStyle(color: Colors.white)),
+                    ),
+                  ],
+                ),
+              ),
             ),
             Positioned(
               top: 16,
@@ -854,6 +875,17 @@ class FullScreenImageScreen extends StatelessWidget {
                 icon: const Icon(Icons.arrow_back, color: Colors.white),
                 onPressed: () => Navigator.of(context).pop(),
               ),
+            ),
+            Positioned(
+              top: 16,
+              right: 16,
+              child: _isSaving
+                  ? const CircularProgressIndicator(
+                      valueColor: AlwaysStoppedAnimation<Color>(Colors.white))
+                  : IconButton(
+                      icon: const Icon(Icons.download, color: Colors.white),
+                      onPressed: _saveImage,
+                    ),
             ),
           ],
         ),
