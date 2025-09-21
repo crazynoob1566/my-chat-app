@@ -28,15 +28,18 @@ const String _supabaseStorageBucket = 'chat-images';
 const Color blue700 = Color(0xFF1976D2);
 const Color blue800 = Color(0xFF1565C0);
 
+// Пароль для доступа к приложению (по умолчанию)
+const String _defaultPassword = '1234';
+
 // Информация о пользователях
 final Map<String, Map<String, dynamic>> users = {
   'user1': {
-    'name': 'Labooba',
+    'name': 'Анна',
     'avatarColor': Colors.purple,
     'avatarText': 'А',
   },
   'user2': {
-    'name': 'Babula',
+    'name': 'Максим',
     'avatarColor': blue700,
     'avatarText': 'М',
   },
@@ -105,7 +108,219 @@ class MyApp extends StatelessWidget {
         primarySwatch: Colors.blue,
         useMaterial3: true,
       ),
-      home: const UserSelectionScreen(),
+      home: const PasswordScreen(), // Начинаем с экрана пароля
+    );
+  }
+}
+
+// Экран ввода пароля
+class PasswordScreen extends StatefulWidget {
+  const PasswordScreen({super.key});
+
+  @override
+  State<PasswordScreen> createState() => _PasswordScreenState();
+}
+
+class _PasswordScreenState extends State<PasswordScreen> {
+  final TextEditingController _passwordController = TextEditingController();
+  final Future<SharedPreferences> _prefs = SharedPreferences.getInstance();
+  String _storedPassword = '';
+  bool _isFirstLaunch = true;
+  bool _obscurePassword = true;
+  String _errorMessage = '';
+
+  @override
+  void initState() {
+    super.initState();
+    _loadPassword();
+  }
+
+  Future<void> _loadPassword() async {
+    final SharedPreferences prefs = await _prefs;
+    setState(() {
+      _storedPassword = prefs.getString('app_password') ?? '';
+      _isFirstLaunch = _storedPassword.isEmpty;
+    });
+  }
+
+  Future<void> _savePassword(String password) async {
+    final SharedPreferences prefs = await _prefs;
+    await prefs.setString('app_password', password);
+    setState(() {
+      _storedPassword = password;
+      _isFirstLaunch = false;
+    });
+  }
+
+  void _checkPassword() {
+    final enteredPassword = _passwordController.text.trim();
+
+    if (_isFirstLaunch) {
+      // Первый запуск - устанавливаем пароль
+      if (enteredPassword.length >= 4) {
+        _savePassword(enteredPassword);
+        _navigateToUserSelection();
+      } else {
+        setState(() {
+          _errorMessage = 'Пароль должен содержать не менее 4 символов';
+        });
+      }
+    } else {
+      // Проверяем пароль
+      if (enteredPassword == _storedPassword) {
+        _navigateToUserSelection();
+      } else {
+        setState(() {
+          _errorMessage = 'Неверный пароль';
+          _passwordController.clear();
+        });
+      }
+    }
+  }
+
+  void _navigateToUserSelection() {
+    Navigator.pushReplacement(
+      context,
+      MaterialPageRoute(builder: (context) => const UserSelectionScreen()),
+    );
+  }
+
+  void _resetPassword() {
+    showDialog(
+      context: context,
+      builder: (BuildContext context) {
+        return AlertDialog(
+          title: const Text('Сброс пароля'),
+          content: const Text(
+              'Вы уверены, что хотите сбросить пароль? Все данные будут удалены.'),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.of(context).pop(),
+              child: const Text('Отмена'),
+            ),
+            TextButton(
+              onPressed: () async {
+                Navigator.of(context).pop();
+                final SharedPreferences prefs = await _prefs;
+                await prefs.clear();
+                setState(() {
+                  _storedPassword = '';
+                  _isFirstLaunch = true;
+                  _passwordController.clear();
+                  _errorMessage = '';
+                });
+              },
+              child: const Text('Сбросить'),
+            ),
+          ],
+        );
+      },
+    );
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Scaffold(
+      body: Container(
+        decoration: const BoxDecoration(
+          gradient: LinearGradient(
+            begin: Alignment.topCenter,
+            end: Alignment.bottomCenter,
+            colors: [Color(0xFF0062FF), Color(0xFF0095FF)],
+          ),
+        ),
+        child: Center(
+          child: SingleChildScrollView(
+            child: Padding(
+              padding: const EdgeInsets.all(20.0),
+              child: Column(
+                mainAxisAlignment: MainAxisAlignment.center,
+                children: [
+                  const Icon(
+                    Icons.lock_outline,
+                    size: 80,
+                    color: Colors.white,
+                  ),
+                  const SizedBox(height: 20),
+                  Text(
+                    _isFirstLaunch ? 'Установите пароль' : 'Введите пароль',
+                    style: const TextStyle(
+                      fontSize: 24,
+                      fontWeight: FontWeight.bold,
+                      color: Colors.white,
+                    ),
+                  ),
+                  const SizedBox(height: 30),
+                  TextField(
+                    controller: _passwordController,
+                    obscureText: _obscurePassword,
+                    style: const TextStyle(color: Colors.white),
+                    decoration: InputDecoration(
+                      hintText: 'Пароль',
+                      hintStyle: const TextStyle(color: Colors.white70),
+                      border: OutlineInputBorder(
+                        borderRadius: BorderRadius.circular(10),
+                        borderSide: BorderSide.none,
+                      ),
+                      filled: true,
+                      fillColor: Colors.white.withOpacity(0.2),
+                      prefixIcon: const Icon(Icons.lock, color: Colors.white),
+                      suffixIcon: IconButton(
+                        icon: Icon(
+                          _obscurePassword
+                              ? Icons.visibility
+                              : Icons.visibility_off,
+                          color: Colors.white,
+                        ),
+                        onPressed: () {
+                          setState(() {
+                            _obscurePassword = !_obscurePassword;
+                          });
+                        },
+                      ),
+                    ),
+                    onSubmitted: (_) => _checkPassword(),
+                  ),
+                  if (_errorMessage.isNotEmpty)
+                    Padding(
+                      padding: const EdgeInsets.only(top: 10),
+                      child: Text(
+                        _errorMessage,
+                        style: const TextStyle(color: Colors.red, fontSize: 14),
+                      ),
+                    ),
+                  const SizedBox(height: 20),
+                  ElevatedButton(
+                    onPressed: _checkPassword,
+                    style: ElevatedButton.styleFrom(
+                      backgroundColor: Colors.white,
+                      foregroundColor: blue700,
+                      padding: const EdgeInsets.symmetric(
+                          horizontal: 40, vertical: 15),
+                      shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(10),
+                      ),
+                    ),
+                    child: Text(
+                      _isFirstLaunch ? 'Установить' : 'Войти',
+                      style: const TextStyle(
+                          fontSize: 16, fontWeight: FontWeight.bold),
+                    ),
+                  ),
+                  if (!_isFirstLaunch)
+                    TextButton(
+                      onPressed: _resetPassword,
+                      child: const Text(
+                        'Забыли пароль?',
+                        style: TextStyle(color: Colors.white70),
+                      ),
+                    ),
+                ],
+              ),
+            ),
+          ),
+        ),
+      ),
     );
   }
 }
@@ -119,6 +334,19 @@ class UserSelectionScreen extends StatelessWidget {
       appBar: AppBar(
         title: const Text('Выберите пользователя'),
         backgroundColor: blue700,
+        actions: [
+          IconButton(
+            icon: const Icon(Icons.lock_open, color: Colors.white),
+            onPressed: () {
+              // Выход к экрану пароля
+              Navigator.pushReplacement(
+                context,
+                MaterialPageRoute(builder: (context) => const PasswordScreen()),
+              );
+            },
+            tooltip: 'Сменить пользователя',
+          ),
+        ],
       ),
       body: Container(
         decoration: const BoxDecoration(
@@ -792,6 +1020,17 @@ class _ChatScreenState extends State<ChatScreen> with WidgetsBindingObserver {
             icon: const Icon(Icons.delete_sweep, color: Colors.white),
             onPressed: _showClearChatDialog,
             tooltip: 'Очистить весь чат',
+          ),
+          // Кнопка выхода к экрану пароля
+          IconButton(
+            icon: const Icon(Icons.logout, color: Colors.white),
+            onPressed: () {
+              Navigator.pushReplacement(
+                context,
+                MaterialPageRoute(builder: (context) => const PasswordScreen()),
+              );
+            },
+            tooltip: 'Выйти',
           ),
         ],
       ),
