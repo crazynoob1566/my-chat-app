@@ -137,14 +137,16 @@ class UserSelectionScreen extends StatelessWidget {
                 style: ElevatedButton.styleFrom(
                   backgroundColor: Colors.white,
                   foregroundColor: Colors.blue[700],
-                  padding: const EdgeInsets.symmetric(horizontal: 40, vertical: 16),
+                  padding:
+                      const EdgeInsets.symmetric(horizontal: 40, vertical: 16),
                   shape: RoundedRectangleBorder(
                     borderRadius: BorderRadius.circular(30),
                   ),
                 ),
                 child: Text(
                   'Я - ${users['user1']!['name']}',
-                  style: const TextStyle(fontSize: 16, fontWeight: FontWeight.bold),
+                  style: const TextStyle(
+                      fontSize: 16, fontWeight: FontWeight.bold),
                 ),
               ),
               const SizedBox(height: 20),
@@ -159,14 +161,16 @@ class UserSelectionScreen extends StatelessWidget {
                 style: ElevatedButton.styleFrom(
                   backgroundColor: Colors.white,
                   foregroundColor: Colors.blue[700],
-                  padding: const EdgeInsets.symmetric(horizontal: 40, vertical: 16),
+                  padding:
+                      const EdgeInsets.symmetric(horizontal: 40, vertical: 16),
                   shape: RoundedRectangleBorder(
                     borderRadius: BorderRadius.circular(30),
                   ),
                 ),
                 child: Text(
                   'Я - ${users['user2']!['name']}',
-                  style: const TextStyle(fontSize: 16, fontWeight: FontWeight.bold),
+                  style: const TextStyle(
+                      fontSize: 16, fontWeight: FontWeight.bold),
                 ),
               ),
             ],
@@ -247,7 +251,7 @@ class _ChatScreenState extends State<ChatScreen> with WidgetsBindingObserver {
   @override
   void didChangeAppLifecycleState(AppLifecycleState state) {
     if (state == AppLifecycleState.paused) {
-      // Приложение переходит в фоновый режим
+      // Приложение переходит в фоновный режим
       _unsubscribeFromMessages();
       _startBackgroundTask();
     } else if (state == AppLifecycleState.resumed) {
@@ -300,7 +304,7 @@ class _ChatScreenState extends State<ChatScreen> with WidgetsBindingObserver {
 
     const NotificationDetails details = NotificationDetails(
       android: androidDetails,
-      iOS: iosSettings,
+      iOS: iosDetails, // Исправлено: iosDetails вместо iosSettings
     );
 
     await _notificationsPlugin.show(
@@ -345,7 +349,7 @@ class _ChatScreenState extends State<ChatScreen> with WidgetsBindingObserver {
 
       // Сохраняем сообщения локально
       await _saveMessagesLocally();
-      
+
       // Прокручиваем к последнему сообщению после загрузки
       WidgetsBinding.instance.addPostFrameCallback((_) {
         _scrollToBottom();
@@ -594,11 +598,12 @@ class _ChatScreenState extends State<ChatScreen> with WidgetsBindingObserver {
   Widget _buildMessageBubble(Map<String, dynamic> message) {
     final isMe = message['sender_id'] == widget.currentUserId;
     final isImage = message['type'] == 'image';
-    final userInfo = users[message['sender_id']] ?? {
-      'name': message['sender_id'],
-      'avatarColor': Colors.grey,
-      'avatarText': '?'
-    };
+    final userInfo = users[message['sender_id']] ??
+        {
+          'name': message['sender_id'],
+          'avatarColor': Colors.grey,
+          'avatarText': '?'
+        };
 
     if (isImage) {
       // Сообщение с изображением
@@ -625,11 +630,12 @@ class _ChatScreenState extends State<ChatScreen> with WidgetsBindingObserver {
 
   @override
   Widget build(BuildContext context) {
-    final friendInfo = users[widget.friendId] ?? {
-      'name': widget.friendId,
-      'avatarColor': Colors.grey,
-      'avatarText': '?'
-    };
+    final friendInfo = users[widget.friendId] ??
+        {
+          'name': widget.friendId,
+          'avatarColor': Colors.grey,
+          'avatarText': '?'
+        };
 
     return Scaffold(
       appBar: AppBar(
@@ -663,13 +669,17 @@ class _ChatScreenState extends State<ChatScreen> with WidgetsBindingObserver {
       body: Stack(
         children: [
           // Фоновое изображение из локальных ресурсов
+          // Фоновое изображение из локальных ресурсов
           Container(
-            decoration: const BoxDecoration(
+            decoration: BoxDecoration(
+              // Убрали const
               image: DecorationImage(
-                image: AssetImage('assets/chat_background.jpg'), // Путь к вашему изображению
-                fit: BoxFit.cover,
+                image: AssetImage(
+                    'assets/chat_background.jpg'), // Путь к вашему изображению
+                fit: BoxFit.cover, // Исправили Boxfit на BoxFit
                 colorFilter: ColorFilter.mode(
-                  Colors.black.withOpacity(0.2), // Легкое затемнение для лучшей читаемости
+                  Colors.black.withOpacity(
+                      0.2), // Теперь это не константное выражение, поэтому можно
                   BlendMode.darken,
                 ),
               ),
@@ -756,7 +766,8 @@ class _ChatScreenState extends State<ChatScreen> with WidgetsBindingObserver {
                     const SizedBox(width: 8),
                     _isSending
                         ? const CircularProgressIndicator(
-                            valueColor: AlwaysStoppedAnimation<Color>(Colors.blue),
+                            valueColor:
+                                AlwaysStoppedAnimation<Color>(Colors.blue),
                           )
                         : CircleAvatar(
                             backgroundColor: Colors.blue,
@@ -795,7 +806,8 @@ class MessageBubble extends StatelessWidget {
     return Padding(
       padding: const EdgeInsets.symmetric(vertical: 4),
       child: Row(
-        mainAxisAlignment: isMe ? MainAxisAlignment.end : MainAxisAlignment.start,
+        mainAxisAlignment:
+            isMe ? MainAxisAlignment.end : MainAxisAlignment.start,
         crossAxisAlignment: CrossAxisAlignment.end,
         children: [
           if (!isMe) // Аватарка только для собеседника
@@ -811,7 +823,8 @@ class MessageBubble extends StatelessWidget {
             ),
           Flexible(
             child: Column(
-              crossAxisAlignment: isMe ? CrossAxisAlignment.end : CrossAxisAlignment.start,
+              crossAxisAlignment:
+                  isMe ? CrossAxisAlignment.end : CrossAxisAlignment.start,
               children: [
                 if (!isMe) // Имя отправителя только для сообщений собеседника
                   Padding(
@@ -833,11 +846,12 @@ class MessageBubble extends StatelessWidget {
                     ),
                   ),
                 Container(
-                  padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
+                  padding:
+                      const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
                   decoration: BoxDecoration(
-                    color: isMe 
-                      ? Colors.blue.withOpacity(0.9) 
-                      : Colors.white.withOpacity(0.9),
+                    color: isMe
+                        ? Colors.blue.withOpacity(0.9)
+                        : Colors.white.withOpacity(0.9),
                     borderRadius: BorderRadius.circular(16),
                     boxShadow: [
                       BoxShadow(
@@ -883,7 +897,7 @@ class MessageBubble extends StatelessWidget {
               ),
             ),
         ],
-      );
+      ),
     );
   }
 }
@@ -915,7 +929,8 @@ class ImageMessageBubble extends StatelessWidget {
     return Padding(
       padding: const EdgeInsets.symmetric(vertical: 4),
       child: Row(
-        mainAxisAlignment: isMe ? MainAxisAlignment.end : MainAxisAlignment.start,
+        mainAxisAlignment:
+            isMe ? MainAxisAlignment.end : MainAxisAlignment.start,
         crossAxisAlignment: CrossAxisAlignment.end,
         children: [
           if (!isMe) // Аватарка только для собеседника
@@ -931,7 +946,8 @@ class ImageMessageBubble extends StatelessWidget {
             ),
           Flexible(
             child: Column(
-              crossAxisAlignment: isMe ? CrossAxisAlignment.end : CrossAxisAlignment.start,
+              crossAxisAlignment:
+                  isMe ? CrossAxisAlignment.end : CrossAxisAlignment.start,
               children: [
                 if (!isMe) // Имя отправителя только для сообщений собеседника
                   Padding(
@@ -955,9 +971,9 @@ class ImageMessageBubble extends StatelessWidget {
                 Container(
                   constraints: const BoxConstraints(maxWidth: 250),
                   decoration: BoxDecoration(
-                    color: isMe 
-                      ? Colors.blue.withOpacity(0.9) 
-                      : Colors.white.withOpacity(0.9),
+                    color: isMe
+                        ? Colors.blue.withOpacity(0.9)
+                        : Colors.white.withOpacity(0.9),
                     borderRadius: BorderRadius.circular(16),
                     boxShadow: [
                       BoxShadow(
@@ -981,7 +997,8 @@ class ImageMessageBubble extends StatelessWidget {
                                 width: 200,
                                 height: 200,
                                 color: Colors.grey[200],
-                                child: const Center(child: CircularProgressIndicator()),
+                                child: const Center(
+                                    child: CircularProgressIndicator()),
                               ),
                               // Изображение
                               CachedNetworkImage(
@@ -990,7 +1007,8 @@ class ImageMessageBubble extends StatelessWidget {
                                   width: 200,
                                   height: 200,
                                   color: Colors.grey[200],
-                                  child: const Center(child: CircularProgressIndicator()),
+                                  child: const Center(
+                                      child: CircularProgressIndicator()),
                                 ),
                                 errorWidget: (context, url, error) => Container(
                                   width: 200,
