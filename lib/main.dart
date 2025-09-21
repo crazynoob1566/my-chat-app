@@ -185,39 +185,6 @@ class _PasswordScreenState extends State<PasswordScreen> {
     );
   }
 
-  void _resetPassword() {
-    showDialog(
-      context: context,
-      builder: (BuildContext context) {
-        return AlertDialog(
-          title: const Text('Сброс пароля'),
-          content: const Text(
-              'Вы уверены, что хотите сбросить пароль? Все данные будут удалены.'),
-          actions: [
-            TextButton(
-              onPressed: () => Navigator.of(context).pop(),
-              child: const Text('Отмена'),
-            ),
-            TextButton(
-              onPressed: () async {
-                Navigator.of(context).pop();
-                final SharedPreferences prefs = await _prefs;
-                await prefs.clear();
-                setState(() {
-                  _storedPassword = '';
-                  _isFirstLaunch = true;
-                  _passwordController.clear();
-                  _errorMessage = '';
-                });
-              },
-              child: const Text('Сбросить'),
-            ),
-          ],
-        );
-      },
-    );
-  }
-
   @override
   Widget build(BuildContext context) {
     return Scaffold(
@@ -307,14 +274,6 @@ class _PasswordScreenState extends State<PasswordScreen> {
                           fontSize: 16, fontWeight: FontWeight.bold),
                     ),
                   ),
-                  if (!_isFirstLaunch)
-                    TextButton(
-                      onPressed: _resetPassword,
-                      child: const Text(
-                        'Забыли пароль?',
-                        style: TextStyle(color: Colors.white70),
-                      ),
-                    ),
                 ],
               ),
             ),
@@ -325,8 +284,173 @@ class _PasswordScreenState extends State<PasswordScreen> {
   }
 }
 
-class UserSelectionScreen extends StatelessWidget {
+class UserSelectionScreen extends StatefulWidget {
   const UserSelectionScreen({super.key});
+
+  @override
+  State<UserSelectionScreen> createState() => _UserSelectionScreenState();
+}
+
+class _UserSelectionScreenState extends State<UserSelectionScreen> {
+  final Future<SharedPreferences> _prefs = SharedPreferences.getInstance();
+
+  // Функция для смены пароля
+  void _showChangePasswordDialog() {
+    final TextEditingController oldPasswordController = TextEditingController();
+    final TextEditingController newPasswordController = TextEditingController();
+    final TextEditingController confirmPasswordController =
+        TextEditingController();
+    bool obscureOldPassword = true;
+    bool obscureNewPassword = true;
+    bool obscureConfirmPassword = true;
+    String errorMessage = '';
+
+    showDialog(
+      context: context,
+      builder: (BuildContext context) {
+        return StatefulBuilder(
+          builder: (context, setState) {
+            return AlertDialog(
+              title: const Text('Смена пароля'),
+              content: SingleChildScrollView(
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    TextField(
+                      controller: oldPasswordController,
+                      obscureText: obscureOldPassword,
+                      decoration: InputDecoration(
+                        labelText: 'Старый пароль',
+                        suffixIcon: IconButton(
+                          icon: Icon(
+                            obscureOldPassword
+                                ? Icons.visibility
+                                : Icons.visibility_off,
+                          ),
+                          onPressed: () {
+                            setState(() {
+                              obscureOldPassword = !obscureOldPassword;
+                            });
+                          },
+                        ),
+                      ),
+                    ),
+                    const SizedBox(height: 10),
+                    TextField(
+                      controller: newPasswordController,
+                      obscureText: obscureNewPassword,
+                      decoration: InputDecoration(
+                        labelText: 'Новый пароль',
+                        suffixIcon: IconButton(
+                          icon: Icon(
+                            obscureNewPassword
+                                ? Icons.visibility
+                                : Icons.visibility_off,
+                          ),
+                          onPressed: () {
+                            setState(() {
+                              obscureNewPassword = !obscureNewPassword;
+                            });
+                          },
+                        ),
+                      ),
+                    ),
+                    const SizedBox(height: 10),
+                    TextField(
+                      controller: confirmPasswordController,
+                      obscureText: obscureConfirmPassword,
+                      decoration: InputDecoration(
+                        labelText: 'Подтвердите новый пароль',
+                        suffixIcon: IconButton(
+                          icon: Icon(
+                            obscureConfirmPassword
+                                ? Icons.visibility
+                                : Icons.visibility_off,
+                          ),
+                          onPressed: () {
+                            setState(() {
+                              obscureConfirmPassword = !obscureConfirmPassword;
+                            });
+                          },
+                        ),
+                      ),
+                    ),
+                    if (errorMessage.isNotEmpty)
+                      Padding(
+                        padding: const EdgeInsets.only(top: 10),
+                        child: Text(
+                          errorMessage,
+                          style:
+                              const TextStyle(color: Colors.red, fontSize: 14),
+                        ),
+                      ),
+                  ],
+                ),
+              ),
+              actions: [
+                TextButton(
+                  onPressed: () => Navigator.of(context).pop(),
+                  child: const Text('Отмена'),
+                ),
+                TextButton(
+                  onPressed: () async {
+                    final oldPassword = oldPasswordController.text.trim();
+                    final newPassword = newPasswordController.text.trim();
+                    final confirmPassword =
+                        confirmPasswordController.text.trim();
+
+                    if (oldPassword.isEmpty ||
+                        newPassword.isEmpty ||
+                        confirmPassword.isEmpty) {
+                      setState(() {
+                        errorMessage = 'Все поля обязательны для заполнения';
+                      });
+                      return;
+                    }
+
+                    if (newPassword.length < 4) {
+                      setState(() {
+                        errorMessage =
+                            'Новый пароль должен содержать не менее 4 символов';
+                      });
+                      return;
+                    }
+
+                    if (newPassword != confirmPassword) {
+                      setState(() {
+                        errorMessage = 'Новые пароли не совпадают';
+                      });
+                      return;
+                    }
+
+                    final SharedPreferences prefs = await _prefs;
+                    final storedPassword =
+                        prefs.getString('app_password') ?? '';
+
+                    if (oldPassword != storedPassword) {
+                      setState(() {
+                        errorMessage = 'Неверный старый пароль';
+                      });
+                      return;
+                    }
+
+                    // Сохраняем новый пароль
+                    await prefs.setString('app_password', newPassword);
+
+                    Navigator.of(context).pop();
+                    ScaffoldMessenger.of(context).showSnackBar(
+                      const SnackBar(content: Text('Пароль успешно изменен')),
+                    );
+                  },
+                  child: const Text('Сохранить'),
+                ),
+              ],
+            );
+          },
+        );
+      },
+    );
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -335,6 +459,12 @@ class UserSelectionScreen extends StatelessWidget {
         title: const Text('Выберите пользователя'),
         backgroundColor: blue700,
         actions: [
+          // Кнопка смены пароля
+          IconButton(
+            icon: const Icon(Icons.lock, color: Colors.white),
+            onPressed: _showChangePasswordDialog,
+            tooltip: 'Сменить пароль',
+          ),
           IconButton(
             icon: const Icon(Icons.lock_open, color: Colors.white),
             onPressed: () {
@@ -431,6 +561,11 @@ class ErrorApp extends StatelessWidget {
     );
   }
 }
+
+// Остальной код (ChatScreen, MessageBubble, ImageMessageBubble, FullScreenImageScreen)
+// остается без изменений, как в предыдущей версии
+
+// ... (остальной код без изменений)
 
 class ChatScreen extends StatefulWidget {
   final String currentUserId;
