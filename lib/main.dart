@@ -679,7 +679,7 @@ class _ChatScreenState extends State<ChatScreen> with WidgetsBindingObserver {
                 fit: BoxFit.cover, // Исправили Boxfit на BoxFit
                 colorFilter: ColorFilter.mode(
                   Colors.black.withOpacity(
-                      0.2), // Теперь это не константное выражение, поэтому можно
+                      0.8), // Теперь это не константное выражение, поэтому можно
                   BlendMode.darken,
                 ),
               ),
