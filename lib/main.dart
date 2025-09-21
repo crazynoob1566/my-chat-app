@@ -20,7 +20,7 @@ import 'dart:async';
 // Конфигурационные константы
 const String _defaultSupabaseUrl = 'https://tpwjupuaflpswdvudexi.supabase.co';
 const String _defaultSupabaseAnonKey =
-    'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InRwd2p1cHVhZmxwc3dkdnVkZXhpIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NTgwMzk2NDAsImV4cCI6MjA3MzYxNTY0MH0.hKSB7GHtUWS1Jyyo5pGiCe2wX2OBvyywbbG7kjo62fo';
+    'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhbmFzZSIsInJlZiI6InRwd2p1cHVhZmxwc3dkdnVkZXhpIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NTgwMzk2NDAsImV4cCI6MjA3MzYxNTY0MH0.hKSB7GHtUWS1Jyyo5pGiCe2wX2OBvyywbbG7kjo62fo';
 const String _supabaseStorageBucket = 'chat-images';
 
 // Информация о пользователях
@@ -110,33 +110,67 @@ class UserSelectionScreen extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      appBar: AppBar(title: const Text('Выберите пользователя')),
-      body: Center(
-        child: Column(
-          mainAxisAlignment: MainAxisAlignment.center,
-          children: [
-            ElevatedButton(
-              onPressed: () => Navigator.pushReplacement(
-                context,
-                MaterialPageRoute(
-                  builder: (context) => const ChatScreen(
-                      currentUserId: 'user1', friendId: 'user2'),
+      appBar: AppBar(
+        title: const Text('Выберите пользователя'),
+        backgroundColor: Colors.blue[700],
+      ),
+      body: Container(
+        decoration: const BoxDecoration(
+          gradient: LinearGradient(
+            begin: Alignment.topCenter,
+            end: Alignment.bottomCenter,
+            colors: [Color(0xFF0062FF), Color(0xFF0095FF)],
+          ),
+        ),
+        child: Center(
+          child: Column(
+            mainAxisAlignment: MainAxisAlignment.center,
+            children: [
+              ElevatedButton(
+                onPressed: () => Navigator.pushReplacement(
+                  context,
+                  MaterialPageRoute(
+                    builder: (context) => const ChatScreen(
+                        currentUserId: 'user1', friendId: 'user2'),
+                  ),
+                ),
+                style: ElevatedButton.styleFrom(
+                  backgroundColor: Colors.white,
+                  foregroundColor: Colors.blue[700],
+                  padding: const EdgeInsets.symmetric(horizontal: 40, vertical: 16),
+                  shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(30),
+                  ),
+                ),
+                child: Text(
+                  'Я - ${users['user1']!['name']}',
+                  style: const TextStyle(fontSize: 16, fontWeight: FontWeight.bold),
                 ),
               ),
-              child: Text('Я - ${users['user1']!['name']}'),
-            ),
-            const SizedBox(height: 20),
-            ElevatedButton(
-              onPressed: () => Navigator.pushReplacement(
-                context,
-                MaterialPageRoute(
-                  builder: (context) => const ChatScreen(
-                      currentUserId: 'user2', friendId: 'user1'),
+              const SizedBox(height: 20),
+              ElevatedButton(
+                onPressed: () => Navigator.pushReplacement(
+                  context,
+                  MaterialPageRoute(
+                    builder: (context) => const ChatScreen(
+                        currentUserId: 'user2', friendId: 'user1'),
+                  ),
+                ),
+                style: ElevatedButton.styleFrom(
+                  backgroundColor: Colors.white,
+                  foregroundColor: Colors.blue[700],
+                  padding: const EdgeInsets.symmetric(horizontal: 40, vertical: 16),
+                  shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(30),
+                  ),
+                ),
+                child: Text(
+                  'Я - ${users['user2']!['name']}',
+                  style: const TextStyle(fontSize: 16, fontWeight: FontWeight.bold),
                 ),
               ),
-              child: Text('Я - ${users['user2']!['name']}'),
-            ),
-          ],
+            ],
+          ),
         ),
       ),
     );
@@ -266,7 +300,7 @@ class _ChatScreenState extends State<ChatScreen> with WidgetsBindingObserver {
 
     const NotificationDetails details = NotificationDetails(
       android: androidDetails,
-      iOS: iosDetails,
+      iOS: iosSettings,
     );
 
     await _notificationsPlugin.show(
@@ -311,7 +345,7 @@ class _ChatScreenState extends State<ChatScreen> with WidgetsBindingObserver {
 
       // Сохраняем сообщения локально
       await _saveMessagesLocally();
-
+      
       // Прокручиваем к последнему сообщению после загрузки
       WidgetsBinding.instance.addPostFrameCallback((_) {
         _scrollToBottom();
@@ -560,12 +594,11 @@ class _ChatScreenState extends State<ChatScreen> with WidgetsBindingObserver {
   Widget _buildMessageBubble(Map<String, dynamic> message) {
     final isMe = message['sender_id'] == widget.currentUserId;
     final isImage = message['type'] == 'image';
-    final userInfo = users[message['sender_id']] ??
-        {
-          'name': message['sender_id'],
-          'avatarColor': Colors.grey,
-          'avatarText': '?'
-        };
+    final userInfo = users[message['sender_id']] ?? {
+      'name': message['sender_id'],
+      'avatarColor': Colors.grey,
+      'avatarText': '?'
+    };
 
     if (isImage) {
       // Сообщение с изображением
@@ -592,12 +625,11 @@ class _ChatScreenState extends State<ChatScreen> with WidgetsBindingObserver {
 
   @override
   Widget build(BuildContext context) {
-    final friendInfo = users[widget.friendId] ??
-        {
-          'name': widget.friendId,
-          'avatarColor': Colors.grey,
-          'avatarText': '?'
-        };
+    final friendInfo = users[widget.friendId] ?? {
+      'name': widget.friendId,
+      'avatarColor': Colors.grey,
+      'avatarText': '?'
+    };
 
     return Scaffold(
       appBar: AppBar(
@@ -611,78 +643,132 @@ class _ChatScreenState extends State<ChatScreen> with WidgetsBindingObserver {
               ),
             ),
             const SizedBox(width: 12),
-            Text('Чат с ${friendInfo['name']}'),
+            Text(
+              'Чат с ${friendInfo['name']}',
+              style: const TextStyle(color: Colors.white),
+            ),
           ],
         ),
+        backgroundColor: Colors.blue[700],
         leading: IconButton(
-          icon: const Icon(Icons.arrow_back),
+          icon: const Icon(Icons.arrow_back, color: Colors.white),
           onPressed: () => Navigator.pushReplacement(
             context,
             MaterialPageRoute(
                 builder: (context) => const UserSelectionScreen()),
           ),
         ),
+        iconTheme: const IconThemeData(color: Colors.white),
       ),
-      body: Column(
+      body: Stack(
         children: [
-          Expanded(
-            child: _messages.isEmpty
-                ? const Center(
-                    child: Text('Нет сообщений'),
-                  )
-                : ListView.builder(
-                    controller: _scrollController,
-                    padding: const EdgeInsets.all(8),
-                    itemCount: _messages.length,
-                    itemBuilder: (context, index) {
-                      final message = _messages[index];
-                      return _buildMessageBubble(message);
-                    },
-                  ),
+          // Фоновое изображение из локальных ресурсов
+          Container(
+            decoration: const BoxDecoration(
+              image: DecorationImage(
+                image: AssetImage('assets/chat_background.jpg'), // Путь к вашему изображению
+                fit: BoxFit.cover,
+                colorFilter: ColorFilter.mode(
+                  Colors.black.withOpacity(0.2), // Легкое затемнение для лучшей читаемости
+                  BlendMode.darken,
+                ),
+              ),
+            ),
           ),
-          if (_isUploadingImage) const LinearProgressIndicator(),
-          Padding(
-            padding: const EdgeInsets.all(8.0),
-            child: Row(
-              children: [
-                IconButton(
-                  icon: const Icon(Icons.photo_library),
-                  onPressed: _pickImage,
-                  tooltip: 'Выбрать из галереи',
-                ),
-                IconButton(
-                  icon: const Icon(Icons.camera_alt),
-                  onPressed: _takePhoto,
-                  tooltip: 'Сделать фото',
-                ),
-                Expanded(
-                  child: TextField(
-                    controller: _messageController,
-                    decoration: InputDecoration(
-                      hintText: 'Введите сообщение...',
-                      border: OutlineInputBorder(
-                        borderRadius: BorderRadius.circular(24),
+          Column(
+            children: [
+              Expanded(
+                child: _messages.isEmpty
+                    ? const Center(
+                        child: Text(
+                          'Нет сообщений',
+                          style: TextStyle(
+                            color: Colors.white70,
+                            fontSize: 18,
+                            fontWeight: FontWeight.bold,
+                          ),
+                        ),
+                      )
+                    : ListView.builder(
+                        controller: _scrollController,
+                        padding: const EdgeInsets.all(8),
+                        itemCount: _messages.length,
+                        itemBuilder: (context, index) {
+                          final message = _messages[index];
+                          return _buildMessageBubble(message);
+                        },
                       ),
-                      contentPadding: const EdgeInsets.symmetric(
-                        horizontal: 16,
-                        vertical: 12,
-                      ),
-                    ),
-                    onSubmitted: (_) => _sendMessage(),
+              ),
+              if (_isUploadingImage)
+                const LinearProgressIndicator(
+                  backgroundColor: Colors.transparent,
+                  valueColor: AlwaysStoppedAnimation<Color>(Colors.white),
+                ),
+              Container(
+                decoration: BoxDecoration(
+                  color: Colors.white.withOpacity(0.8),
+                  borderRadius: const BorderRadius.only(
+                    topLeft: Radius.circular(20),
+                    topRight: Radius.circular(20),
                   ),
                 ),
-                const SizedBox(width: 8),
-                _isSending
-                    ? const CircularProgressIndicator()
-                    : CircleAvatar(
-                        backgroundColor: Colors.blue,
-                        child: IconButton(
-                          icon: const Icon(Icons.send, color: Colors.white),
-                          onPressed: _sendMessage,
+                padding: const EdgeInsets.all(8.0),
+                child: Row(
+                  children: [
+                    IconButton(
+                      icon: const Icon(Icons.photo_library, color: Colors.blue),
+                      onPressed: _pickImage,
+                      tooltip: 'Выбрать из галереи',
+                    ),
+                    IconButton(
+                      icon: const Icon(Icons.camera_alt, color: Colors.blue),
+                      onPressed: _takePhoto,
+                      tooltip: 'Сделать фото',
+                    ),
+                    Expanded(
+                      child: Container(
+                        decoration: BoxDecoration(
+                          color: Colors.white,
+                          borderRadius: BorderRadius.circular(24),
+                          boxShadow: [
+                            BoxShadow(
+                              color: Colors.grey.withOpacity(0.3),
+                              spreadRadius: 1,
+                              blurRadius: 3,
+                              offset: const Offset(0, 1),
+                            ),
+                          ],
+                        ),
+                        child: TextField(
+                          controller: _messageController,
+                          decoration: InputDecoration(
+                            hintText: 'Введите сообщение...',
+                            border: InputBorder.none,
+                            contentPadding: const EdgeInsets.symmetric(
+                              horizontal: 16,
+                              vertical: 12,
+                            ),
+                          ),
+                          onSubmitted: (_) => _sendMessage(),
                         ),
                       ),
-              ],
-            ),
+                    ),
+                    const SizedBox(width: 8),
+                    _isSending
+                        ? const CircularProgressIndicator(
+                            valueColor: AlwaysStoppedAnimation<Color>(Colors.blue),
+                          )
+                        : CircleAvatar(
+                            backgroundColor: Colors.blue,
+                            child: IconButton(
+                              icon: const Icon(Icons.send, color: Colors.white),
+                              onPressed: _sendMessage,
+                            ),
+                          ),
+                  ],
+                ),
+              ),
+            ],
           ),
         ],
       ),
@@ -709,8 +795,7 @@ class MessageBubble extends StatelessWidget {
     return Padding(
       padding: const EdgeInsets.symmetric(vertical: 4),
       child: Row(
-        mainAxisAlignment:
-            isMe ? MainAxisAlignment.end : MainAxisAlignment.start,
+        mainAxisAlignment: isMe ? MainAxisAlignment.end : MainAxisAlignment.start,
         crossAxisAlignment: CrossAxisAlignment.end,
         children: [
           if (!isMe) // Аватарка только для собеседника
@@ -726,8 +811,7 @@ class MessageBubble extends StatelessWidget {
             ),
           Flexible(
             child: Column(
-              crossAxisAlignment:
-                  isMe ? CrossAxisAlignment.end : CrossAxisAlignment.start,
+              crossAxisAlignment: isMe ? CrossAxisAlignment.end : CrossAxisAlignment.start,
               children: [
                 if (!isMe) // Имя отправителя только для сообщений собеседника
                   Padding(
@@ -737,16 +821,31 @@ class MessageBubble extends StatelessWidget {
                       style: const TextStyle(
                         fontSize: 12,
                         fontWeight: FontWeight.w500,
-                        color: Colors.grey,
+                        color: Colors.white,
+                        shadows: [
+                          Shadow(
+                            blurRadius: 3.0,
+                            color: Colors.black,
+                            offset: Offset(1.0, 1.0),
+                          ),
+                        ],
                       ),
                     ),
                   ),
                 Container(
-                  padding:
-                      const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
+                  padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
                   decoration: BoxDecoration(
-                    color: isMe ? Colors.blue : Colors.grey[300],
+                    color: isMe 
+                      ? Colors.blue.withOpacity(0.9) 
+                      : Colors.white.withOpacity(0.9),
                     borderRadius: BorderRadius.circular(16),
+                    boxShadow: [
+                      BoxShadow(
+                        color: Colors.black.withOpacity(0.2),
+                        blurRadius: 4,
+                        offset: const Offset(0, 2),
+                      ),
+                    ],
                   ),
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.end,
@@ -754,7 +853,7 @@ class MessageBubble extends StatelessWidget {
                       Text(
                         message,
                         style: TextStyle(
-                          color: isMe ? Colors.white : Colors.black,
+                          color: isMe ? Colors.white : Colors.black87,
                         ),
                       ),
                       const SizedBox(height: 4),
@@ -784,7 +883,7 @@ class MessageBubble extends StatelessWidget {
               ),
             ),
         ],
-      ),
+      );
     );
   }
 }
@@ -816,8 +915,7 @@ class ImageMessageBubble extends StatelessWidget {
     return Padding(
       padding: const EdgeInsets.symmetric(vertical: 4),
       child: Row(
-        mainAxisAlignment:
-            isMe ? MainAxisAlignment.end : MainAxisAlignment.start,
+        mainAxisAlignment: isMe ? MainAxisAlignment.end : MainAxisAlignment.start,
         crossAxisAlignment: CrossAxisAlignment.end,
         children: [
           if (!isMe) // Аватарка только для собеседника
@@ -833,8 +931,7 @@ class ImageMessageBubble extends StatelessWidget {
             ),
           Flexible(
             child: Column(
-              crossAxisAlignment:
-                  isMe ? CrossAxisAlignment.end : CrossAxisAlignment.start,
+              crossAxisAlignment: isMe ? CrossAxisAlignment.end : CrossAxisAlignment.start,
               children: [
                 if (!isMe) // Имя отправителя только для сообщений собеседника
                   Padding(
@@ -844,15 +941,31 @@ class ImageMessageBubble extends StatelessWidget {
                       style: const TextStyle(
                         fontSize: 12,
                         fontWeight: FontWeight.w500,
-                        color: Colors.grey,
+                        color: Colors.white,
+                        shadows: [
+                          Shadow(
+                            blurRadius: 3.0,
+                            color: Colors.black,
+                            offset: Offset(1.0, 1.0),
+                          ),
+                        ],
                       ),
                     ),
                   ),
                 Container(
                   constraints: const BoxConstraints(maxWidth: 250),
                   decoration: BoxDecoration(
-                    color: isMe ? Colors.blue : Colors.grey[300],
+                    color: isMe 
+                      ? Colors.blue.withOpacity(0.9) 
+                      : Colors.white.withOpacity(0.9),
                     borderRadius: BorderRadius.circular(16),
+                    boxShadow: [
+                      BoxShadow(
+                        color: Colors.black.withOpacity(0.2),
+                        blurRadius: 4,
+                        offset: const Offset(0, 2),
+                      ),
+                    ],
                   ),
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.end,
@@ -868,8 +981,7 @@ class ImageMessageBubble extends StatelessWidget {
                                 width: 200,
                                 height: 200,
                                 color: Colors.grey[200],
-                                child: const Center(
-                                    child: CircularProgressIndicator()),
+                                child: const Center(child: CircularProgressIndicator()),
                               ),
                               // Изображение
                               CachedNetworkImage(
@@ -878,8 +990,7 @@ class ImageMessageBubble extends StatelessWidget {
                                   width: 200,
                                   height: 200,
                                   color: Colors.grey[200],
-                                  child: const Center(
-                                      child: CircularProgressIndicator()),
+                                  child: const Center(child: CircularProgressIndicator()),
                                 ),
                                 errorWidget: (context, url, error) => Container(
                                   width: 200,
