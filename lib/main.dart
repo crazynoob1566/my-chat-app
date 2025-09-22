@@ -34,16 +34,17 @@ const String _defaultPassword = '1234';
 // Информация о пользователях
 final Map<String, Map<String, dynamic>> users = {
   'user1': {
-    'name': 'Анна',
+    'name': 'Labooba',
     'avatarColor': Colors.purple,
-    'avatarText': 'А',
-    'imageAsset': 'assets/images/anna.png', // Путь к изображению Анны
+    'avatarText': 'L',
+    'imageAsset': 'assets/images/user1_avatar.png', // Путь к изображению Анны
   },
   'user2': {
-    'name': 'Максим',
+    'name': 'Babula',
     'avatarColor': blue700,
-    'avatarText': 'М',
-    'imageAsset': 'assets/images/maxim.png', // Путь к изображению Максима
+    'avatarText': 'B',
+    'imageAsset':
+        'assets/images/user2_avatar.png', // Путь к изображению Максима
   },
 };
 
