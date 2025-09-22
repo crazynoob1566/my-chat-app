@@ -34,5 +34,5 @@ flutter:
   uses-material-design: true
   assets:
     - assets/chat_background.jpg
-    - assets/user1_avatar.png
-    - assets/user2_avatar.png
+    - assets/images/user1_avatar.png
+    - assets/images/user2_avatar.png

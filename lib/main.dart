@@ -34,24 +34,16 @@ const String _defaultPassword = '1234';
 // Информация о пользователях
 final Map<String, Map<String, dynamic>> users = {
   'user1': {
-    'name': 'Labooba',
+    'name': 'Анна',
     'avatarColor': Colors.purple,
-    'avatarText': 'L',
-    'icon': Image.asset(
-      'assets/user1_avatar.png',
-      width: 60,
-      height: 60,
-    ), // Иконка для первого пользователя
+    'avatarText': 'А',
+    'imageAsset': 'assets/images/anna.png', // Путь к изображению Анны
   },
   'user2': {
-    'name': 'Babula',
+    'name': 'Максим',
     'avatarColor': blue700,
-    'avatarText': 'B',
-    'icon': Image.asset(
-      'assets/user2_avatar.png',
-      width: 60,
-      height: 60,
-    ), // Иконка для второго пользователя
+    'avatarText': 'М',
+    'imageAsset': 'assets/images/maxim.png', // Путь к изображению Максима
   },
 };
 
@@ -462,9 +454,9 @@ class _UserSelectionScreenState extends State<UserSelectionScreen> {
     );
   }
 
-  // Виджет для отображения иконки пользователя
+  // Виджет для отображения изображения пользователя
   Widget _buildUserIcon(
-      String userId, String userName, IconData icon, Color color) {
+      String userId, String userName, String imageAsset, Color color) {
     return GestureDetector(
       onTap: () {
         final friendId = userId == 'user1' ? 'user2' : 'user1';
@@ -509,10 +501,21 @@ class _UserSelectionScreenState extends State<UserSelectionScreen> {
                   ),
                 ],
               ),
-              child: Icon(
-                icon,
-                size: 40,
-                color: Colors.white,
+              child: ClipOval(
+                child: Image.asset(
+                  imageAsset,
+                  width: 70,
+                  height: 70,
+                  fit: BoxFit.cover,
+                  errorBuilder: (context, error, stackTrace) {
+                    // Если изображение не найдено, показываем иконку по умолчанию
+                    return Icon(
+                      Icons.person,
+                      size: 40,
+                      color: Colors.white,
+                    );
+                  },
+                ),
               ),
             ),
             const SizedBox(height: 16),
@@ -588,18 +591,18 @@ class _UserSelectionScreenState extends State<UserSelectionScreen> {
               Row(
                 mainAxisAlignment: MainAxisAlignment.spaceEvenly,
                 children: [
-                  // Иконка первого пользователя слева
+                  // Изображение первого пользователя слева
                   _buildUserIcon(
                     'user1',
                     users['user1']!['name'],
-                    users['user1']!['icon'],
+                    users['user1']!['imageAsset'],
                     users['user1']!['avatarColor'],
                   ),
-                  // Иконка второго пользователя справа
+                  // Изображение второго пользователя справа
                   _buildUserIcon(
                     'user2',
                     users['user2']!['name'],
-                    users['user2']!['icon'],
+                    users['user2']!['imageAsset'],
                     users['user2']!['avatarColor'],
                   ),
                 ],
