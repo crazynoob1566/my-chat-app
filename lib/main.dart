@@ -360,6 +360,26 @@ class _UserSelectionScreenState extends State<UserSelectionScreen> {
                     ),
                     const SizedBox(height: 10),
                     TextField(
+                      controller: newPasswordController,
+                      obscureText: obscureNewPassword,
+                      decoration: InputDecoration(
+                        labelText: 'Новый пароль',
+                        suffixIcon: IconButton(
+                          icon: Icon(
+                            obscureNewPassword
+                                ? Icons.visibility
+                                : Icons.visibility_off,
+                          ),
+                          onPressed: () {
+                            setState(() {
+                              obscureNewPassword = !obscureNewPassword;
+                            });
+                          },
+                        ),
+                      ),
+                    ),
+                    const SizedBox(height: 10),
+                    TextField(
                       controller: confirmPasswordController,
                       obscureText: obscureConfirmPassword,
                       decoration: InputDecoration(
@@ -455,88 +475,56 @@ class _UserSelectionScreenState extends State<UserSelectionScreen> {
     );
   }
 
-  // Виджет для отображения изображения пользователя
-  Widget _buildUserIcon(
-      String userId, String userName, String imageAsset, Color color) {
-    return GestureDetector(
-      onTap: () {
-        final friendId = userId == 'user1' ? 'user2' : 'user1';
-        Navigator.pushReplacement(
-          context,
-          MaterialPageRoute(
-            builder: (context) => ChatScreen(
-              currentUserId: userId,
-              friendId: friendId,
+  // Виджет для кликабельных областей поверх изображения
+  Widget _buildClickableArea(String userId, String userName, Rect area) {
+    return Positioned(
+      left: area.left,
+      top: area.top,
+      width: area.width,
+      height: area.height,
+      child: GestureDetector(
+        onTap: () {
+          final friendId = userId == 'user1' ? 'user2' : 'user1';
+          Navigator.pushReplacement(
+            context,
+            MaterialPageRoute(
+              builder: (context) => ChatScreen(
+                currentUserId: userId,
+                friendId: friendId,
+              ),
+            ),
+          );
+        },
+        child: Container(
+          decoration: BoxDecoration(
+            color: Colors.transparent,
+            borderRadius: BorderRadius.circular(20),
+            border: Border.all(
+              color: Colors.white.withOpacity(0.5),
+              width: 2,
             ),
           ),
-        );
-      },
-      child: Container(
-        width: 140,
-        height: 160,
-        decoration: BoxDecoration(
-          color: Colors.white.withOpacity(0.9),
-          borderRadius: BorderRadius.circular(20),
-          boxShadow: [
-            BoxShadow(
-              color: Colors.black.withOpacity(0.2),
-              blurRadius: 10,
-              offset: const Offset(0, 4),
-            ),
-          ],
-        ),
-        child: Column(
-          mainAxisAlignment: MainAxisAlignment.center,
-          children: [
-            Container(
-              width: 80,
-              height: 80,
-              decoration: BoxDecoration(
-                color: color,
-                shape: BoxShape.circle,
-                boxShadow: [
-                  BoxShadow(
-                    color: color.withOpacity(0.5),
-                    blurRadius: 10,
-                    offset: const Offset(0, 4),
+          child: Center(
+            child: AnimatedOpacity(
+              opacity: 0.7,
+              duration: const Duration(milliseconds: 300),
+              child: Container(
+                padding: const EdgeInsets.all(8),
+                decoration: BoxDecoration(
+                  color: Colors.black.withOpacity(0.5),
+                  borderRadius: BorderRadius.circular(10),
+                ),
+                child: Text(
+                  userName,
+                  style: const TextStyle(
+                    color: Colors.white,
+                    fontSize: 16,
+                    fontWeight: FontWeight.bold,
                   ),
-                ],
-              ),
-              child: ClipOval(
-                child: Image.asset(
-                  imageAsset,
-                  width: 70,
-                  height: 70,
-                  fit: BoxFit.cover,
-                  errorBuilder: (context, error, stackTrace) {
-                    // Если изображение не найдено, показываем иконку по умолчанию
-                    return Icon(
-                      Icons.person,
-                      size: 40,
-                      color: Colors.white,
-                    );
-                  },
                 ),
               ),
             ),
-            const SizedBox(height: 16),
-            Text(
-              userName,
-              style: TextStyle(
-                fontSize: 18,
-                fontWeight: FontWeight.bold,
-                color: Colors.grey[800],
-              ),
-            ),
-            const SizedBox(height: 4),
-            Text(
-              'Нажмите для входа',
-              style: TextStyle(
-                fontSize: 12,
-                color: Colors.grey[600],
-              ),
-            ),
-          ],
+          ),
         ),
       ),
     );
@@ -544,10 +532,43 @@ class _UserSelectionScreenState extends State<UserSelectionScreen> {
 
   @override
   Widget build(BuildContext context) {
+    // Размеры экрана
+    final screenSize = MediaQuery.of(context).size;
+
+    // Определяем области для клика (примерные координаты - настройте под ваше изображение)
+    // Labooba область (левая иконка)
+    final laboobaArea = Rect.fromLTWH(
+      screenSize.width * 0.1, // 10% от ширины слева
+      screenSize.height * 0.4, // 40% от высоты сверху
+      screenSize.width * 0.35, // 35% ширины
+      screenSize.height * 0.4, // 40% высоты
+    );
+
+    // Babula область (правая иконка)
+    final babulaArea = Rect.fromLTWH(
+      screenSize.width * 0.55, // 55% от ширины слева
+      screenSize.height * 0.4, // 40% от высоты сверху
+      screenSize.width * 0.35, // 35% ширины
+      screenSize.height * 0.4, // 40% высоты
+    );
+
     return Scaffold(
       appBar: AppBar(
-        title: const Text('Выберите пользователя'),
-        backgroundColor: blue700,
+        title: const Text('Выберите персонажа'),
+        backgroundColor: Colors.transparent,
+        elevation: 0,
+        flexibleSpace: Container(
+          decoration: BoxDecoration(
+            gradient: LinearGradient(
+              begin: Alignment.topLeft,
+              end: Alignment.bottomRight,
+              colors: [
+                Colors.purple.withOpacity(0.8),
+                Colors.blue.withOpacity(0.8),
+              ],
+            ),
+          ),
+        ),
         actions: [
           // Кнопка смены пароля
           IconButton(
@@ -568,57 +589,138 @@ class _UserSelectionScreenState extends State<UserSelectionScreen> {
           ),
         ],
       ),
-      body: Container(
-        decoration: const BoxDecoration(
-          gradient: LinearGradient(
-            begin: Alignment.topCenter,
-            end: Alignment.bottomCenter,
-            colors: [Color(0xFF0062FF), Color(0xFF0095FF)],
+      body: Stack(
+        children: [
+          // Фоновое киберпанк изображение
+          Container(
+            width: double.infinity,
+            height: double.infinity,
+            decoration: const BoxDecoration(
+              image: DecorationImage(
+                image: AssetImage(
+                    'assets/images/user_selection_background.jpg'), // Замените на путь к вашему изображению
+                fit: BoxFit.cover,
+              ),
+            ),
           ),
-        ),
-        child: Center(
-          child: Column(
-            mainAxisAlignment: MainAxisAlignment.center,
-            children: [
-              const Text(
-                'Кто вы?',
-                style: TextStyle(
-                  fontSize: 24,
-                  fontWeight: FontWeight.bold,
-                  color: Colors.white,
-                ),
-              ),
-              const SizedBox(height: 30),
-              Row(
-                mainAxisAlignment: MainAxisAlignment.spaceEvenly,
-                children: [
-                  // Изображение первого пользователя слева
-                  _buildUserIcon(
-                    'user1',
-                    users['user1']!['name'],
-                    users['user1']!['imageAsset'],
-                    users['user1']!['avatarColor'],
-                  ),
-                  // Изображение второго пользователя справа
-                  _buildUserIcon(
-                    'user2',
-                    users['user2']!['name'],
-                    users['user2']!['imageAsset'],
-                    users['user2']!['avatarColor'],
-                  ),
-                ],
-              ),
-              const SizedBox(height: 40),
-              const Text(
-                'Выберите свой профиль для входа в чат',
-                style: TextStyle(
-                  fontSize: 16,
-                  color: Colors.white70,
-                ),
-              ),
-            ],
+
+          // Затемнение для лучшей читаемости текста
+          Container(
+            color: Colors.black.withOpacity(0.3),
           ),
-        ),
+
+          // Кликабельные области для Labooba
+          _buildClickableArea('user1', 'Labooba', laboobaArea),
+
+          // Кликабельные области для Babula
+          _buildClickableArea('user2', 'Babula', babulaArea),
+
+          // Заголовок и инструкция
+          Positioned(
+            top: screenSize.height * 0.1,
+            left: 0,
+            right: 0,
+            child: Column(
+              children: [
+                Text(
+                  'КТО ВЫ?',
+                  style: TextStyle(
+                    fontSize: 32,
+                    fontWeight: FontWeight.bold,
+                    color: Colors.white,
+                    shadows: [
+                      Shadow(
+                        blurRadius: 10,
+                        color: Colors.purple,
+                        offset: const Offset(0, 0),
+                      ),
+                      Shadow(
+                        blurRadius: 20,
+                        color: Colors.blue,
+                        offset: const Offset(0, 0),
+                      ),
+                    ],
+                  ),
+                ),
+                const SizedBox(height: 20),
+                Text(
+                  'Выберите своего персонажа для входа в чат',
+                  style: TextStyle(
+                    fontSize: 16,
+                    color: Colors.white.withOpacity(0.9),
+                    shadows: [
+                      const Shadow(
+                        blurRadius: 5,
+                        color: Colors.black,
+                        offset: Offset(1, 1),
+                      ),
+                    ],
+                  ),
+                ),
+              ],
+            ),
+          ),
+
+          // Подсказки внизу экрана
+          Positioned(
+            bottom: screenSize.height * 0.05,
+            left: 0,
+            right: 0,
+            child: Column(
+              children: [
+                Text(
+                  'Нажмите на персонажа для входа',
+                  style: TextStyle(
+                    fontSize: 14,
+                    color: Colors.white.withOpacity(0.8),
+                    fontStyle: FontStyle.italic,
+                  ),
+                ),
+                const SizedBox(height: 10),
+                Row(
+                  mainAxisAlignment: MainAxisAlignment.spaceAround,
+                  children: [
+                    _buildCharacterHint('Labooba', Colors.purple),
+                    _buildCharacterHint('Babula', Colors.blue),
+                  ],
+                ),
+              ],
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  // Виджет для подсказки персонажа
+  Widget _buildCharacterHint(String name, Color color) {
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+      decoration: BoxDecoration(
+        color: color.withOpacity(0.3),
+        borderRadius: BorderRadius.circular(20),
+        border: Border.all(color: color.withOpacity(0.5)),
+      ),
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Container(
+            width: 12,
+            height: 12,
+            decoration: BoxDecoration(
+              color: color,
+              shape: BoxShape.circle,
+            ),
+          ),
+          const SizedBox(width: 8),
+          Text(
+            name,
+            style: TextStyle(
+              color: Colors.white,
+              fontWeight: FontWeight.bold,
+            ),
+          ),
+        ],
       ),
     );
   }
