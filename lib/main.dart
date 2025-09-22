@@ -34,14 +34,24 @@ const String _defaultPassword = '1234';
 // Информация о пользователях
 final Map<String, Map<String, dynamic>> users = {
   'user1': {
-    'name': 'Анна',
+    'name': 'Labooba',
     'avatarColor': Colors.purple,
-    'avatarText': 'А',
+    'avatarText': 'L',
+    'icon': Image.asset(
+      'assets/user1_avatar.png',
+      width: 60,
+      height: 60,
+    ), // Иконка для первого пользователя
   },
   'user2': {
-    'name': 'Максим',
+    'name': 'Babula',
     'avatarColor': blue700,
-    'avatarText': 'М',
+    'avatarText': 'B',
+    'icon': Image.asset(
+      'assets/user2_avatar.png',
+      width: 60,
+      height: 60,
+    ), // Иконка для второго пользователя
   },
 };
 
@@ -452,6 +462,82 @@ class _UserSelectionScreenState extends State<UserSelectionScreen> {
     );
   }
 
+  // Виджет для отображения иконки пользователя
+  Widget _buildUserIcon(
+      String userId, String userName, IconData icon, Color color) {
+    return GestureDetector(
+      onTap: () {
+        final friendId = userId == 'user1' ? 'user2' : 'user1';
+        Navigator.pushReplacement(
+          context,
+          MaterialPageRoute(
+            builder: (context) => ChatScreen(
+              currentUserId: userId,
+              friendId: friendId,
+            ),
+          ),
+        );
+      },
+      child: Container(
+        width: 140,
+        height: 160,
+        decoration: BoxDecoration(
+          color: Colors.white.withOpacity(0.9),
+          borderRadius: BorderRadius.circular(20),
+          boxShadow: [
+            BoxShadow(
+              color: Colors.black.withOpacity(0.2),
+              blurRadius: 10,
+              offset: const Offset(0, 4),
+            ),
+          ],
+        ),
+        child: Column(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            Container(
+              width: 80,
+              height: 80,
+              decoration: BoxDecoration(
+                color: color,
+                shape: BoxShape.circle,
+                boxShadow: [
+                  BoxShadow(
+                    color: color.withOpacity(0.5),
+                    blurRadius: 10,
+                    offset: const Offset(0, 4),
+                  ),
+                ],
+              ),
+              child: Icon(
+                icon,
+                size: 40,
+                color: Colors.white,
+              ),
+            ),
+            const SizedBox(height: 16),
+            Text(
+              userName,
+              style: TextStyle(
+                fontSize: 18,
+                fontWeight: FontWeight.bold,
+                color: Colors.grey[800],
+              ),
+            ),
+            const SizedBox(height: 4),
+            Text(
+              'Нажмите для входа',
+              style: TextStyle(
+                fontSize: 12,
+                color: Colors.grey[600],
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     return Scaffold(
@@ -490,51 +576,40 @@ class _UserSelectionScreenState extends State<UserSelectionScreen> {
           child: Column(
             mainAxisAlignment: MainAxisAlignment.center,
             children: [
-              ElevatedButton(
-                onPressed: () => Navigator.pushReplacement(
-                  context,
-                  MaterialPageRoute(
-                    builder: (context) => const ChatScreen(
-                        currentUserId: 'user1', friendId: 'user2'),
-                  ),
-                ),
-                style: ElevatedButton.styleFrom(
-                  backgroundColor: Colors.white,
-                  foregroundColor: blue700,
-                  padding:
-                      const EdgeInsets.symmetric(horizontal: 40, vertical: 16),
-                  shape: RoundedRectangleBorder(
-                    borderRadius: BorderRadius.circular(30),
-                  ),
-                ),
-                child: Text(
-                  'Я - ${users['user1']!['name']}',
-                  style: const TextStyle(
-                      fontSize: 16, fontWeight: FontWeight.bold),
+              const Text(
+                'Кто вы?',
+                style: TextStyle(
+                  fontSize: 24,
+                  fontWeight: FontWeight.bold,
+                  color: Colors.white,
                 ),
               ),
-              const SizedBox(height: 20),
-              ElevatedButton(
-                onPressed: () => Navigator.pushReplacement(
-                  context,
-                  MaterialPageRoute(
-                    builder: (context) => const ChatScreen(
-                        currentUserId: 'user2', friendId: 'user1'),
+              const SizedBox(height: 30),
+              Row(
+                mainAxisAlignment: MainAxisAlignment.spaceEvenly,
+                children: [
+                  // Иконка первого пользователя слева
+                  _buildUserIcon(
+                    'user1',
+                    users['user1']!['name'],
+                    users['user1']!['icon'],
+                    users['user1']!['avatarColor'],
                   ),
-                ),
-                style: ElevatedButton.styleFrom(
-                  backgroundColor: Colors.white,
-                  foregroundColor: blue700,
-                  padding:
-                      const EdgeInsets.symmetric(horizontal: 40, vertical: 16),
-                  shape: RoundedRectangleBorder(
-                    borderRadius: BorderRadius.circular(30),
+                  // Иконка второго пользователя справа
+                  _buildUserIcon(
+                    'user2',
+                    users['user2']!['name'],
+                    users['user2']!['icon'],
+                    users['user2']!['avatarColor'],
                   ),
-                ),
-                child: Text(
-                  'Я - ${users['user2']!['name']}',
-                  style: const TextStyle(
-                      fontSize: 16, fontWeight: FontWeight.bold),
+                ],
+              ),
+              const SizedBox(height: 40),
+              const Text(
+                'Выберите свой профиль для входа в чат',
+                style: TextStyle(
+                  fontSize: 16,
+                  color: Colors.white70,
                 ),
               ),
             ],
@@ -544,6 +619,9 @@ class _UserSelectionScreenState extends State<UserSelectionScreen> {
     );
   }
 }
+
+// Остальной код (ErrorApp, ChatScreen, MessageBubble, ImageMessageBubble, FullScreenImageScreen)
+// остается без изменений, как в предыдущей версии
 
 class ErrorApp extends StatelessWidget {
   final String message;
@@ -561,6 +639,11 @@ class ErrorApp extends StatelessWidget {
     );
   }
 }
+
+// Классы ChatScreen, MessageBubble, ImageMessageBubble, FullScreenImageScreen
+// остаются без изменений, как в предыдущей версии
+
+// ... (остальной код без изменений)
 
 // Остальной код (ChatScreen, MessageBubble, ImageMessageBubble, FullScreenImageScreen)
 // остается без изменений, как в предыдущей версии
