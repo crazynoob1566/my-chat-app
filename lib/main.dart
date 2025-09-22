@@ -18,15 +18,17 @@ import 'package:http/http.dart' as http;
 import 'dart:async';
 
 // Конфигурационные константы - ЗАМЕНИТЕ НА ВАШИ РЕАЛЬНЫЕ ЗНАЧЕНИЯ
-const String _defaultSupabaseUrl =
-    'https://tpwjupuaflpswdvudexi.supabase.co'; // Ваш URL
+const String _defaultSupabaseUrl = 'https://tpwjupuaflpswdvudexi.supabase.co';
 const String _defaultSupabaseAnonKey =
-    'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InRwd2p1cHVhZmxwc3dkdnVkZXhpIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NTgwMzk2NDAsImV4cCI6MjA3MzYxNTY0MH0.hKSB7GHtUWS1Jyyo5pGiCe2wX2OBvyywbbG7kjo62fo'; // Ваш anon ключ
+    'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InRwd2p1cHVhZmxwc3dkdnVkZXhpIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NTgwMzk2NDAsImV4cCI6MjA3MzYxNTY0MH0.hKSB7GHtUWS1Jyyo5pGiCe2wX2OBvyywbbG7kjo62fo';
 const String _supabaseStorageBucket = 'chat-images';
 
-// Цвета
-const Color blue700 = Color(0xFF1976D2);
-const Color blue800 = Color(0xFF1565C0);
+// Цвета Telegram
+const Color telegramBlue = Color(0xFF0088CC);
+const Color telegramGrey = Color(0xFFE8E8E8);
+const Color telegramDarkGrey = Color(0xFFA0A0A0);
+const Color telegramLightBlue = Color(0xFF5EC2FF);
+const Color telegramBackground = Color(0xFFF5F5F5);
 
 // Пароль для доступа к приложению (по умолчанию)
 const String _defaultPassword = '1234';
@@ -35,16 +37,15 @@ const String _defaultPassword = '1234';
 final Map<String, Map<String, dynamic>> users = {
   'user1': {
     'name': 'Labooba',
-    'avatarColor': Colors.purple,
+    'avatarColor': Color(0xFF6B4D8C),
     'avatarText': 'L',
-    'imageAsset': 'assets/images/user1_avatar.png', // Путь к изображению Анны
+    'imageAsset': 'assets/images/user1_avatar.png',
   },
   'user2': {
     'name': 'Babula',
-    'avatarColor': blue700,
+    'avatarColor': Color(0xFF2A6EBB),
     'avatarText': 'B',
-    'imageAsset':
-        'assets/images/user2_avatar.png', // Путь к изображению Максима
+    'imageAsset': 'assets/images/user2_avatar.png',
   },
 };
 
@@ -54,7 +55,6 @@ Future<void> main() async {
   // Инициализация уведомлений
   final FlutterLocalNotificationsPlugin notificationsPlugin =
       FlutterLocalNotificationsPlugin();
-
   const AndroidInitializationSettings androidSettings =
       AndroidInitializationSettings('@mipmap/ic_launcher');
   const DarwinInitializationSettings iosSettings =
@@ -63,23 +63,19 @@ Future<void> main() async {
     android: androidSettings,
     iOS: iosSettings,
   );
-
   await notificationsPlugin.initialize(initSettings);
 
   String supabaseUrl;
   String supabaseAnonKey;
 
-  // Пытаемся получить переменные из окружения
   supabaseUrl = Platform.environment['SUPABASE_URL'] ?? '';
   supabaseAnonKey = Platform.environment['SUPABASE_ANON_KEY'] ?? '';
 
-  // Если в окружении нет переменных, используем значения по умолчанию
   if (supabaseUrl.isEmpty || supabaseAnonKey.isEmpty) {
     supabaseUrl = _defaultSupabaseUrl;
     supabaseAnonKey = _defaultSupabaseAnonKey;
   }
 
-  // Проверяем, что ключи не пустые
   if (supabaseUrl.isEmpty || supabaseAnonKey.isEmpty) {
     runApp(const ErrorApp(
         message: 'Ошибка конфигурации: отсутствуют ключи Supabase'));
@@ -87,11 +83,7 @@ Future<void> main() async {
   }
 
   try {
-    // Инициализируем Supabase
-    await Supabase.initialize(
-      url: supabaseUrl,
-      anonKey: supabaseAnonKey,
-    );
+    await Supabase.initialize(url: supabaseUrl, anonKey: supabaseAnonKey);
   } catch (e) {
     runApp(ErrorApp(message: 'Ошибка инициализации Supabase: $e'));
     return;
@@ -106,17 +98,18 @@ class MyApp extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return MaterialApp(
-      title: 'Мой чат',
+      title: 'Telegram Chat',
       theme: ThemeData(
         primarySwatch: Colors.blue,
         useMaterial3: true,
+        fontFamily: 'Roboto',
       ),
-      home: const PasswordScreen(), // Начинаем с экрана пароля
+      home: const PasswordScreen(),
     );
   }
 }
 
-// Экран ввода пароля
+// Экран ввода пароля (оставляем без изменений)
 class PasswordScreen extends StatefulWidget {
   const PasswordScreen({super.key});
 
@@ -157,9 +150,7 @@ class _PasswordScreenState extends State<PasswordScreen> {
 
   void _checkPassword() {
     final enteredPassword = _passwordController.text.trim();
-
     if (_isFirstLaunch) {
-      // Первый запуск - устанавливаем пароль
       if (enteredPassword.length >= 4) {
         _savePassword(enteredPassword);
         _navigateToUserSelection();
@@ -169,7 +160,6 @@ class _PasswordScreenState extends State<PasswordScreen> {
         });
       }
     } else {
-      // Проверяем пароль
       if (enteredPassword == _storedPassword) {
         _navigateToUserSelection();
       } else {
@@ -191,12 +181,13 @@ class _PasswordScreenState extends State<PasswordScreen> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
+      backgroundColor: telegramBlue,
       body: Container(
-        decoration: const BoxDecoration(
+        decoration: BoxDecoration(
           gradient: LinearGradient(
             begin: Alignment.topCenter,
             end: Alignment.bottomCenter,
-            colors: [Color(0xFF0062FF), Color(0xFF0095FF)],
+            colors: [telegramBlue, telegramLightBlue],
           ),
         ),
         child: Center(
@@ -206,19 +197,14 @@ class _PasswordScreenState extends State<PasswordScreen> {
               child: Column(
                 mainAxisAlignment: MainAxisAlignment.center,
                 children: [
-                  const Icon(
-                    Icons.lock_outline,
-                    size: 80,
-                    color: Colors.white,
-                  ),
+                  const Icon(Icons.lock_outline, size: 80, color: Colors.white),
                   const SizedBox(height: 20),
                   Text(
                     _isFirstLaunch ? 'Установите пароль' : 'Введите пароль',
                     style: const TextStyle(
-                      fontSize: 24,
-                      fontWeight: FontWeight.bold,
-                      color: Colors.white,
-                    ),
+                        fontSize: 24,
+                        fontWeight: FontWeight.bold,
+                        color: Colors.white),
                   ),
                   const SizedBox(height: 30),
                   TextField(
@@ -229,24 +215,19 @@ class _PasswordScreenState extends State<PasswordScreen> {
                       hintText: 'Пароль',
                       hintStyle: const TextStyle(color: Colors.white70),
                       border: OutlineInputBorder(
-                        borderRadius: BorderRadius.circular(10),
-                        borderSide: BorderSide.none,
-                      ),
+                          borderRadius: BorderRadius.circular(10),
+                          borderSide: BorderSide.none),
                       filled: true,
                       fillColor: Colors.white.withOpacity(0.2),
                       prefixIcon: const Icon(Icons.lock, color: Colors.white),
                       suffixIcon: IconButton(
                         icon: Icon(
-                          _obscurePassword
-                              ? Icons.visibility
-                              : Icons.visibility_off,
-                          color: Colors.white,
-                        ),
-                        onPressed: () {
-                          setState(() {
-                            _obscurePassword = !_obscurePassword;
-                          });
-                        },
+                            _obscurePassword
+                                ? Icons.visibility
+                                : Icons.visibility_off,
+                            color: Colors.white),
+                        onPressed: () => setState(
+                            () => _obscurePassword = !_obscurePassword),
                       ),
                     ),
                     onSubmitted: (_) => _checkPassword(),
@@ -254,28 +235,24 @@ class _PasswordScreenState extends State<PasswordScreen> {
                   if (_errorMessage.isNotEmpty)
                     Padding(
                       padding: const EdgeInsets.only(top: 10),
-                      child: Text(
-                        _errorMessage,
-                        style: const TextStyle(color: Colors.red, fontSize: 14),
-                      ),
+                      child: Text(_errorMessage,
+                          style:
+                              const TextStyle(color: Colors.red, fontSize: 14)),
                     ),
                   const SizedBox(height: 20),
                   ElevatedButton(
                     onPressed: _checkPassword,
                     style: ElevatedButton.styleFrom(
                       backgroundColor: Colors.white,
-                      foregroundColor: blue700,
+                      foregroundColor: telegramBlue,
                       padding: const EdgeInsets.symmetric(
                           horizontal: 40, vertical: 15),
                       shape: RoundedRectangleBorder(
-                        borderRadius: BorderRadius.circular(10),
-                      ),
+                          borderRadius: BorderRadius.circular(10)),
                     ),
-                    child: Text(
-                      _isFirstLaunch ? 'Установить' : 'Войти',
-                      style: const TextStyle(
-                          fontSize: 16, fontWeight: FontWeight.bold),
-                    ),
+                    child: Text(_isFirstLaunch ? 'Установить' : 'Войти',
+                        style: const TextStyle(
+                            fontSize: 16, fontWeight: FontWeight.bold)),
                   ),
                 ],
               ),
@@ -287,6 +264,7 @@ class _PasswordScreenState extends State<PasswordScreen> {
   }
 }
 
+// Экран выбора пользователя (оставляем без изменений)
 class UserSelectionScreen extends StatefulWidget {
   const UserSelectionScreen({super.key});
 
@@ -297,7 +275,6 @@ class UserSelectionScreen extends StatefulWidget {
 class _UserSelectionScreenState extends State<UserSelectionScreen> {
   final Future<SharedPreferences> _prefs = SharedPreferences.getInstance();
 
-  // Функция для смены пароля
   void _showChangePasswordDialog() {
     final TextEditingController oldPasswordController = TextEditingController();
     final TextEditingController newPasswordController = TextEditingController();
@@ -311,171 +288,111 @@ class _UserSelectionScreenState extends State<UserSelectionScreen> {
     showDialog(
       context: context,
       builder: (BuildContext context) {
-        return StatefulBuilder(
-          builder: (context, setState) {
-            return AlertDialog(
-              title: const Text('Смена пароля'),
-              content: SingleChildScrollView(
-                child: Column(
-                  mainAxisSize: MainAxisSize.min,
-                  children: [
-                    TextField(
-                      controller: oldPasswordController,
-                      obscureText: obscureOldPassword,
-                      decoration: InputDecoration(
-                        labelText: 'Старый пароль',
-                        suffixIcon: IconButton(
-                          icon: Icon(
-                            obscureOldPassword
-                                ? Icons.visibility
-                                : Icons.visibility_off,
-                          ),
-                          onPressed: () {
-                            setState(() {
-                              obscureOldPassword = !obscureOldPassword;
-                            });
-                          },
-                        ),
-                      ),
+        return StatefulBuilder(builder: (context, setState) {
+          return AlertDialog(
+            title: const Text('Смена пароля'),
+            content: SingleChildScrollView(
+              child: Column(mainAxisSize: MainAxisSize.min, children: [
+                TextField(
+                  controller: oldPasswordController,
+                  obscureText: obscureOldPassword,
+                  decoration: InputDecoration(
+                    labelText: 'Старый пароль',
+                    suffixIcon: IconButton(
+                      icon: Icon(obscureOldPassword
+                          ? Icons.visibility
+                          : Icons.visibility_off),
+                      onPressed: () => setState(
+                          () => obscureOldPassword = !obscureOldPassword),
                     ),
-                    const SizedBox(height: 10),
-                    TextField(
-                      controller: newPasswordController,
-                      obscureText: obscureNewPassword,
-                      decoration: InputDecoration(
-                        labelText: 'Новый пароль',
-                        suffixIcon: IconButton(
-                          icon: Icon(
-                            obscureNewPassword
-                                ? Icons.visibility
-                                : Icons.visibility_off,
-                          ),
-                          onPressed: () {
-                            setState(() {
-                              obscureNewPassword = !obscureNewPassword;
-                            });
-                          },
-                        ),
-                      ),
-                    ),
-                    const SizedBox(height: 10),
-                    TextField(
-                      controller: newPasswordController,
-                      obscureText: obscureNewPassword,
-                      decoration: InputDecoration(
-                        labelText: 'Новый пароль',
-                        suffixIcon: IconButton(
-                          icon: Icon(
-                            obscureNewPassword
-                                ? Icons.visibility
-                                : Icons.visibility_off,
-                          ),
-                          onPressed: () {
-                            setState(() {
-                              obscureNewPassword = !obscureNewPassword;
-                            });
-                          },
-                        ),
-                      ),
-                    ),
-                    const SizedBox(height: 10),
-                    TextField(
-                      controller: confirmPasswordController,
-                      obscureText: obscureConfirmPassword,
-                      decoration: InputDecoration(
-                        labelText: 'Подтвердите новый пароль',
-                        suffixIcon: IconButton(
-                          icon: Icon(
-                            obscureConfirmPassword
-                                ? Icons.visibility
-                                : Icons.visibility_off,
-                          ),
-                          onPressed: () {
-                            setState(() {
-                              obscureConfirmPassword = !obscureConfirmPassword;
-                            });
-                          },
-                        ),
-                      ),
-                    ),
-                    if (errorMessage.isNotEmpty)
-                      Padding(
-                        padding: const EdgeInsets.only(top: 10),
-                        child: Text(
-                          errorMessage,
-                          style:
-                              const TextStyle(color: Colors.red, fontSize: 14),
-                        ),
-                      ),
-                  ],
+                  ),
                 ),
-              ),
-              actions: [
-                TextButton(
+                const SizedBox(height: 10),
+                TextField(
+                  controller: newPasswordController,
+                  obscureText: obscureNewPassword,
+                  decoration: InputDecoration(
+                    labelText: 'Новый пароль',
+                    suffixIcon: IconButton(
+                      icon: Icon(obscureNewPassword
+                          ? Icons.visibility
+                          : Icons.visibility_off),
+                      onPressed: () => setState(
+                          () => obscureNewPassword = !obscureNewPassword),
+                    ),
+                  ),
+                ),
+                const SizedBox(height: 10),
+                TextField(
+                  controller: confirmPasswordController,
+                  obscureText: obscureConfirmPassword,
+                  decoration: InputDecoration(
+                    labelText: 'Подтвердите новый пароль',
+                    suffixIcon: IconButton(
+                      icon: Icon(obscureConfirmPassword
+                          ? Icons.visibility
+                          : Icons.visibility_off),
+                      onPressed: () => setState(() =>
+                          obscureConfirmPassword = !obscureConfirmPassword),
+                    ),
+                  ),
+                ),
+                if (errorMessage.isNotEmpty)
+                  Padding(
+                      padding: const EdgeInsets.only(top: 10),
+                      child: Text(errorMessage,
+                          style: const TextStyle(
+                              color: Colors.red, fontSize: 14))),
+              ]),
+            ),
+            actions: [
+              TextButton(
                   onPressed: () => Navigator.of(context).pop(),
-                  child: const Text('Отмена'),
-                ),
-                TextButton(
-                  onPressed: () async {
-                    final oldPassword = oldPasswordController.text.trim();
-                    final newPassword = newPasswordController.text.trim();
-                    final confirmPassword =
-                        confirmPasswordController.text.trim();
+                  child: const Text('Отмена')),
+              TextButton(
+                onPressed: () async {
+                  final oldPassword = oldPasswordController.text.trim();
+                  final newPassword = newPasswordController.text.trim();
+                  final confirmPassword = confirmPasswordController.text.trim();
 
-                    if (oldPassword.isEmpty ||
-                        newPassword.isEmpty ||
-                        confirmPassword.isEmpty) {
-                      setState(() {
-                        errorMessage = 'Все поля обязательны для заполнения';
-                      });
-                      return;
-                    }
+                  if (oldPassword.isEmpty ||
+                      newPassword.isEmpty ||
+                      confirmPassword.isEmpty) {
+                    setState(() =>
+                        errorMessage = 'Все поля обязательны для заполнения');
+                    return;
+                  }
+                  if (newPassword.length < 4) {
+                    setState(() => errorMessage =
+                        'Новый пароль должен содержать не менее 4 символов');
+                    return;
+                  }
+                  if (newPassword != confirmPassword) {
+                    setState(() => errorMessage = 'Новые пароли не совпадают');
+                    return;
+                  }
 
-                    if (newPassword.length < 4) {
-                      setState(() {
-                        errorMessage =
-                            'Новый пароль должен содержать не менее 4 символов';
-                      });
-                      return;
-                    }
+                  final SharedPreferences prefs = await _prefs;
+                  final storedPassword = prefs.getString('app_password') ?? '';
+                  if (oldPassword != storedPassword) {
+                    setState(() => errorMessage = 'Неверный старый пароль');
+                    return;
+                  }
 
-                    if (newPassword != confirmPassword) {
-                      setState(() {
-                        errorMessage = 'Новые пароли не совпадают';
-                      });
-                      return;
-                    }
-
-                    final SharedPreferences prefs = await _prefs;
-                    final storedPassword =
-                        prefs.getString('app_password') ?? '';
-
-                    if (oldPassword != storedPassword) {
-                      setState(() {
-                        errorMessage = 'Неверный старый пароль';
-                      });
-                      return;
-                    }
-
-                    // Сохраняем новый пароль
-                    await prefs.setString('app_password', newPassword);
-
-                    Navigator.of(context).pop();
-                    ScaffoldMessenger.of(context).showSnackBar(
-                      const SnackBar(content: Text('Пароль успешно изменен')),
-                    );
-                  },
-                  child: const Text('Сохранить'),
-                ),
-              ],
-            );
-          },
-        );
+                  await prefs.setString('app_password', newPassword);
+                  Navigator.of(context).pop();
+                  ScaffoldMessenger.of(context).showSnackBar(
+                      const SnackBar(content: Text('Пароль успешно изменен')));
+                },
+                child: const Text('Сохранить'),
+              ),
+            ],
+          );
+        });
       },
     );
   }
 
-  // Виджет для кликабельных областей поверх изображения
   Widget _buildClickableArea(String userId, String userName, Rect area) {
     return Positioned(
       left: area.left,
@@ -488,21 +405,15 @@ class _UserSelectionScreenState extends State<UserSelectionScreen> {
           Navigator.pushReplacement(
             context,
             MaterialPageRoute(
-              builder: (context) => ChatScreen(
-                currentUserId: userId,
-                friendId: friendId,
-              ),
-            ),
+                builder: (context) =>
+                    ChatScreen(currentUserId: userId, friendId: friendId)),
           );
         },
         child: Container(
           decoration: BoxDecoration(
             color: Colors.transparent,
             borderRadius: BorderRadius.circular(20),
-            border: Border.all(
-              color: Colors.white.withOpacity(0.5),
-              width: 2,
-            ),
+            border: Border.all(color: Colors.white.withOpacity(0.5), width: 2),
           ),
           child: Center(
             child: AnimatedOpacity(
@@ -511,17 +422,13 @@ class _UserSelectionScreenState extends State<UserSelectionScreen> {
               child: Container(
                 padding: const EdgeInsets.all(8),
                 decoration: BoxDecoration(
-                  color: Colors.black.withOpacity(0.5),
-                  borderRadius: BorderRadius.circular(10),
-                ),
-                child: Text(
-                  userName,
-                  style: const TextStyle(
-                    color: Colors.white,
-                    fontSize: 16,
-                    fontWeight: FontWeight.bold,
-                  ),
-                ),
+                    color: Colors.black.withOpacity(0.5),
+                    borderRadius: BorderRadius.circular(10)),
+                child: Text(userName,
+                    style: const TextStyle(
+                        color: Colors.white,
+                        fontSize: 16,
+                        fontWeight: FontWeight.bold)),
               ),
             ),
           ),
@@ -532,25 +439,17 @@ class _UserSelectionScreenState extends State<UserSelectionScreen> {
 
   @override
   Widget build(BuildContext context) {
-    // Размеры экрана
     final screenSize = MediaQuery.of(context).size;
-
-    // Определяем области для клика (примерные координаты - настройте под ваше изображение)
-    // Labooba область (левая иконка)
     final laboobaArea = Rect.fromLTWH(
-      screenSize.width * 0.1, // 10% от ширины слева
-      screenSize.height * 0.4, // 40% от высоты сверху
-      screenSize.width * 0.35, // 35% ширины
-      screenSize.height * 0.4, // 40% высоты
-    );
-
-    // Babula область (правая иконка)
+        screenSize.width * 0.1,
+        screenSize.height * 0.4,
+        screenSize.width * 0.35,
+        screenSize.height * 0.4);
     final babulaArea = Rect.fromLTWH(
-      screenSize.width * 0.55, // 55% от ширины слева
-      screenSize.height * 0.4, // 40% от высоты сверху
-      screenSize.width * 0.35, // 35% ширины
-      screenSize.height * 0.4, // 40% высоты
-    );
+        screenSize.width * 0.55,
+        screenSize.height * 0.4,
+        screenSize.width * 0.35,
+        screenSize.height * 0.4);
 
     return Scaffold(
       appBar: AppBar(
@@ -564,207 +463,134 @@ class _UserSelectionScreenState extends State<UserSelectionScreen> {
               end: Alignment.bottomRight,
               colors: [
                 Colors.purple.withOpacity(0.8),
-                Colors.blue.withOpacity(0.8),
+                Colors.blue.withOpacity(0.8)
               ],
             ),
           ),
         ),
         actions: [
-          // Кнопка смены пароля
           IconButton(
-            icon: const Icon(Icons.lock, color: Colors.white),
-            onPressed: _showChangePasswordDialog,
-            tooltip: 'Сменить пароль',
-          ),
+              icon: const Icon(Icons.lock, color: Colors.white),
+              onPressed: _showChangePasswordDialog,
+              tooltip: 'Сменить пароль'),
           IconButton(
             icon: const Icon(Icons.lock_open, color: Colors.white),
-            onPressed: () {
-              // Выход к экрану пароля
-              Navigator.pushReplacement(
+            onPressed: () => Navigator.pushReplacement(
                 context,
-                MaterialPageRoute(builder: (context) => const PasswordScreen()),
-              );
-            },
+                MaterialPageRoute(
+                    builder: (context) => const PasswordScreen())),
             tooltip: 'Сменить пользователя',
           ),
         ],
       ),
-      body: Stack(
-        children: [
-          // Фоновое киберпанк изображение
-          Container(
-            width: double.infinity,
-            height: double.infinity,
-            decoration: const BoxDecoration(
-              image: DecorationImage(
-                image: AssetImage(
-                    'assets/images/user_selection_background.jpg'), // Замените на путь к вашему изображению
-                fit: BoxFit.cover,
-              ),
-            ),
+      body: Stack(children: [
+        Container(
+          width: double.infinity,
+          height: double.infinity,
+          decoration: const BoxDecoration(
+            image: DecorationImage(
+                image:
+                    AssetImage('assets/images/user_selection_background.jpg'),
+                fit: BoxFit.cover),
           ),
-
-          // Затемнение для лучшей читаемости текста
-          Container(
-            color: Colors.black.withOpacity(0.3),
-          ),
-
-          // Кликабельные области для Labooba
-          _buildClickableArea('user1', 'Labooba', laboobaArea),
-
-          // Кликабельные области для Babula
-          _buildClickableArea('user2', 'Babula', babulaArea),
-
-          // Заголовок и инструкция
-          Positioned(
-            top: screenSize.height * 0.1,
-            left: 0,
-            right: 0,
-            child: Column(
-              children: [
-                Text(
-                  'КТО ВЫ?',
-                  style: TextStyle(
+        ),
+        Container(color: Colors.black.withOpacity(0.3)),
+        _buildClickableArea('user1', 'Labooba', laboobaArea),
+        _buildClickableArea('user2', 'Babula', babulaArea),
+        Positioned(
+          top: screenSize.height * 0.1,
+          left: 0,
+          right: 0,
+          child: Column(children: [
+            Text('КТО ВЫ?',
+                style: TextStyle(
                     fontSize: 32,
                     fontWeight: FontWeight.bold,
                     color: Colors.white,
                     shadows: [
                       Shadow(
-                        blurRadius: 10,
-                        color: Colors.purple,
-                        offset: const Offset(0, 0),
-                      ),
+                          blurRadius: 10,
+                          color: Colors.purple,
+                          offset: const Offset(0, 0)),
                       Shadow(
-                        blurRadius: 20,
-                        color: Colors.blue,
-                        offset: const Offset(0, 0),
-                      ),
-                    ],
-                  ),
-                ),
-                const SizedBox(height: 20),
-                Text(
-                  'Выберите своего персонажа для входа в чат',
-                  style: TextStyle(
+                          blurRadius: 20,
+                          color: Colors.blue,
+                          offset: const Offset(0, 0)),
+                    ])),
+            const SizedBox(height: 20),
+            Text('Выберите своего персонажа для входа в чат',
+                style: TextStyle(
                     fontSize: 16,
                     color: Colors.white.withOpacity(0.9),
                     shadows: [
                       const Shadow(
-                        blurRadius: 5,
-                        color: Colors.black,
-                        offset: Offset(1, 1),
-                      ),
-                    ],
-                  ),
-                ),
-              ],
-            ),
-          ),
-
-          // Подсказки внизу экрана
-          Positioned(
-            bottom: screenSize.height * 0.05,
-            left: 0,
-            right: 0,
-            child: Column(
-              children: [
-                Text(
-                  'Нажмите на персонажа для входа',
-                  style: TextStyle(
+                          blurRadius: 5,
+                          color: Colors.black,
+                          offset: Offset(1, 1))
+                    ])),
+          ]),
+        ),
+        Positioned(
+          bottom: screenSize.height * 0.05,
+          left: 0,
+          right: 0,
+          child: Column(children: [
+            Text('Нажмите на персонажа для входа',
+                style: TextStyle(
                     fontSize: 14,
                     color: Colors.white.withOpacity(0.8),
-                    fontStyle: FontStyle.italic,
-                  ),
-                ),
-                const SizedBox(height: 10),
-                Row(
-                  mainAxisAlignment: MainAxisAlignment.spaceAround,
-                  children: [
-                    _buildCharacterHint('Labooba', Colors.purple),
-                    _buildCharacterHint('Babula', Colors.blue),
-                  ],
-                ),
-              ],
-            ),
-          ),
-        ],
-      ),
+                    fontStyle: FontStyle.italic)),
+            const SizedBox(height: 10),
+            Row(mainAxisAlignment: MainAxisAlignment.spaceAround, children: [
+              _buildCharacterHint('Labooba', Colors.purple),
+              _buildCharacterHint('Babula', Colors.blue),
+            ]),
+          ]),
+        ),
+      ]),
     );
   }
 
-  // Виджет для подсказки персонажа
   Widget _buildCharacterHint(String name, Color color) {
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
       decoration: BoxDecoration(
-        color: color.withOpacity(0.3),
-        borderRadius: BorderRadius.circular(20),
-        border: Border.all(color: color.withOpacity(0.5)),
-      ),
-      child: Row(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          Container(
+          color: color.withOpacity(0.3),
+          borderRadius: BorderRadius.circular(20),
+          border: Border.all(color: color.withOpacity(0.5))),
+      child: Row(mainAxisSize: MainAxisSize.min, children: [
+        Container(
             width: 12,
             height: 12,
-            decoration: BoxDecoration(
-              color: color,
-              shape: BoxShape.circle,
-            ),
-          ),
-          const SizedBox(width: 8),
-          Text(
-            name,
-            style: TextStyle(
-              color: Colors.white,
-              fontWeight: FontWeight.bold,
-            ),
-          ),
-        ],
-      ),
+            decoration: BoxDecoration(color: color, shape: BoxShape.circle)),
+        const SizedBox(width: 8),
+        Text(name,
+            style: const TextStyle(
+                color: Colors.white, fontWeight: FontWeight.bold)),
+      ]),
     );
   }
 }
 
-// Остальной код (ErrorApp, ChatScreen, MessageBubble, ImageMessageBubble, FullScreenImageScreen)
-// остается без изменений, как в предыдущей версии
-
 class ErrorApp extends StatelessWidget {
   final String message;
-
   const ErrorApp({super.key, required this.message});
 
   @override
   Widget build(BuildContext context) {
     return MaterialApp(
-      home: Scaffold(
-        body: Center(
-          child: Text(message),
-        ),
-      ),
+      home: Scaffold(body: Center(child: Text(message))),
     );
   }
 }
 
-// Классы ChatScreen, MessageBubble, ImageMessageBubble, FullScreenImageScreen
-// остаются без изменений, как в предыдущей версии
-
-// ... (остальной код без изменений)
-
-// Остальной код (ChatScreen, MessageBubble, ImageMessageBubble, FullScreenImageScreen)
-// остается без изменений, как в предыдущей версии
-
-// ... (остальной код без изменений)
-
+// ОСНОВНОЙ ЭКРАН ЧАТА С ИНТЕРФЕЙСОМ TELEGRAM
 class ChatScreen extends StatefulWidget {
   final String currentUserId;
   final String friendId;
 
-  const ChatScreen({
-    super.key,
-    required this.currentUserId,
-    required this.friendId,
-  });
+  const ChatScreen(
+      {super.key, required this.currentUserId, required this.friendId});
 
   @override
   State<ChatScreen> createState() => _ChatScreenState();
@@ -784,6 +610,7 @@ class _ChatScreenState extends State<ChatScreen> with WidgetsBindingObserver {
   bool _isSending = false;
   bool _isUploadingImage = false;
   Timer? _backgroundTimer;
+  bool _showEmojiKeyboard = false;
 
   @override
   void initState() {
@@ -809,11 +636,9 @@ class _ChatScreenState extends State<ChatScreen> with WidgetsBindingObserver {
   @override
   void didChangeAppLifecycleState(AppLifecycleState state) {
     if (state == AppLifecycleState.paused) {
-      // Приложение переходит в фоновый режим
       _unsubscribeFromMessages();
       _startBackgroundTask();
     } else if (state == AppLifecycleState.resumed) {
-      // Приложение возвращается на передний план
       _stopBackgroundTask();
       _loadMessages();
       _subscribeToMessages();
@@ -824,28 +649,24 @@ class _ChatScreenState extends State<ChatScreen> with WidgetsBindingObserver {
     if (_scrollController.hasClients) {
       final double position = _scrollController.position.maxScrollExtent;
       if (position > 0) {
-        _scrollController.jumpTo(position);
+        _scrollController.animateTo(
+          position,
+          duration: const Duration(milliseconds: 300),
+          curve: Curves.easeOut,
+        );
       }
     } else {
-      // Если контроллер еще не готов, пробуем снова через короткое время
-      Future.delayed(const Duration(milliseconds: 100), () {
-        _scrollToBottom();
-      });
+      Future.delayed(const Duration(milliseconds: 100), _scrollToBottom);
     }
   }
 
   Future<void> _initializeNotifications() async {
     const AndroidInitializationSettings androidSettings =
         AndroidInitializationSettings('@mipmap/ic_launcher');
-
     const DarwinInitializationSettings iosSettings =
         DarwinInitializationSettings();
-
-    const InitializationSettings settings = InitializationSettings(
-      android: androidSettings,
-      iOS: iosSettings,
-    );
-
+    const InitializationSettings settings =
+        InitializationSettings(android: androidSettings, iOS: iosSettings);
     await _notificationsPlugin.initialize(settings);
   }
 
@@ -857,20 +678,10 @@ class _ChatScreenState extends State<ChatScreen> with WidgetsBindingObserver {
       importance: Importance.max,
       priority: Priority.high,
     );
-
     const DarwinNotificationDetails iosDetails = DarwinNotificationDetails();
-
-    const NotificationDetails details = NotificationDetails(
-      android: androidDetails,
-      iOS: iosDetails,
-    );
-
-    await _notificationsPlugin.show(
-      0,
-      title,
-      body,
-      details,
-    );
+    const NotificationDetails details =
+        NotificationDetails(android: androidDetails, iOS: iosDetails);
+    await _notificationsPlugin.show(0, title, body, details);
   }
 
   Future<void> _saveMessagesLocally() async {
@@ -891,10 +702,7 @@ class _ChatScreenState extends State<ChatScreen> with WidgetsBindingObserver {
 
   Future<void> _loadMessages() async {
     try {
-      // Сначала загружаем кэшированные сообщения
       await _loadCachedMessages();
-
-      // Затем загружаем новые сообщения с сервера
       final response = await _supabase
           .from('messages')
           .select()
@@ -904,16 +712,9 @@ class _ChatScreenState extends State<ChatScreen> with WidgetsBindingObserver {
       setState(() {
         _messages = List<Map<String, dynamic>>.from(response);
       });
-
-      // Сохраняем сообщения локально
       await _saveMessagesLocally();
-
-      // Прокручиваем к последнему сообщению после загрузки
-      WidgetsBinding.instance.addPostFrameCallback((_) {
-        _scrollToBottom();
-      });
+      WidgetsBinding.instance.addPostFrameCallback((_) => _scrollToBottom());
     } catch (e) {
-      // В случае ошибки используем кэшированные сообщения
       print('Ошибка загрузки сообщений: $e');
     }
   }
@@ -933,24 +734,16 @@ class _ChatScreenState extends State<ChatScreen> with WidgetsBindingObserver {
               setState(() {
                 _messages.add(newMessage);
               });
-
-              // Сохраняем обновленный список сообщений локально
               await _saveMessagesLocally();
-
-              // Прокручиваем к последнему сообщению
-              WidgetsBinding.instance.addPostFrameCallback((_) {
-                _scrollToBottom();
-              });
-
-              // Показываем уведомление для новых сообщений
+              WidgetsBinding.instance
+                  .addPostFrameCallback((_) => _scrollToBottom());
               if (newMessage['sender_id'] != widget.currentUserId) {
                 final messageContent = newMessage['type'] == 'image'
                     ? '📷 Фото'
                     : newMessage['content'];
                 _showNotification(
-                  'Новое сообщение от ${users[newMessage['sender_id']]!['name']}',
-                  messageContent,
-                );
+                    'Новое сообщение от ${users[newMessage['sender_id']]!['name']}',
+                    messageContent);
               }
             }
           },
@@ -977,7 +770,6 @@ class _ChatScreenState extends State<ChatScreen> with WidgetsBindingObserver {
   Future<void> _checkForNewMessages() async {
     try {
       final lastMessageId = _messages.isNotEmpty ? _messages.last['id'] : 0;
-
       final response = await _supabase
           .from('messages')
           .select()
@@ -986,23 +778,13 @@ class _ChatScreenState extends State<ChatScreen> with WidgetsBindingObserver {
           .order('created_at', ascending: true);
 
       if (response.isNotEmpty) {
-        // Есть новые сообщения
         setState(() {
           _messages.addAll(List<Map<String, dynamic>>.from(response));
         });
-
         await _saveMessagesLocally();
-
-        // Прокручиваем к последнему сообщению
-        WidgetsBinding.instance.addPostFrameCallback((_) {
-          _scrollToBottom();
-        });
-
-        // Показываем уведомление
+        WidgetsBinding.instance.addPostFrameCallback((_) => _scrollToBottom());
         _showNotification(
-          'Новые сообщения',
-          'У вас ${response.length} новых сообщений',
-        );
+            'Новые сообщения', 'У вас ${response.length} новых сообщений');
       }
     } catch (e) {
       print('Ошибка проверки новых сообщений: $e');
@@ -1013,9 +795,7 @@ class _ChatScreenState extends State<ChatScreen> with WidgetsBindingObserver {
     final String content = _messageController.text.trim();
     if (content.isEmpty) return;
 
-    setState(() {
-      _isSending = true;
-    });
+    setState(() => _isSending = true);
 
     try {
       await _supabase.from('messages').insert({
@@ -1024,22 +804,14 @@ class _ChatScreenState extends State<ChatScreen> with WidgetsBindingObserver {
         'content': content,
         'type': 'text',
       });
-
       _messageController.clear();
+      setState(() => _showEmojiKeyboard = false);
     } catch (e) {
-      // Проверяем, что виджет все еще смонтирован перед использованием контекста
       if (!mounted) return;
-
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('Ошибка отправки: $e')),
-      );
+      ScaffoldMessenger.of(context)
+          .showSnackBar(SnackBar(content: Text('Ошибка отправки: $e')));
     } finally {
-      // Проверяем, что виджет все еще смонтирован перед вызовом setState
-      if (mounted) {
-        setState(() {
-          _isSending = false;
-        });
-      }
+      if (mounted) setState(() => _isSending = false);
     }
   }
 
@@ -1053,57 +825,36 @@ class _ChatScreenState extends State<ChatScreen> with WidgetsBindingObserver {
       });
     } catch (e) {
       if (!mounted) return;
-
       ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('Ошибка отправки изображения: $e')),
-      );
+          SnackBar(content: Text('Ошибка отправки изображения: $e')));
     }
   }
 
   Future<String?> _uploadImage(XFile imageFile) async {
     try {
-      setState(() {
-        _isUploadingImage = true;
-      });
-
-      // Читаем файл
+      setState(() => _isUploadingImage = true);
       final bytes = await imageFile.readAsBytes();
-
-      // Определяем MIME-тип
       final mimeType = lookupMimeType(imageFile.path);
-
-      // Генерируем уникальное имя файла
       final timestamp = DateTime.now().millisecondsSinceEpoch;
       final fileExtension = imageFile.path.split('.').last;
       final fileName = '${widget.currentUserId}_$timestamp.$fileExtension';
 
-      // Загружаем в Supabase Storage с указанием MIME-типа
       await _supabase.storage.from('chat-images').uploadBinary(
             fileName,
             bytes,
-            fileOptions: FileOptions(
-              contentType: mimeType ?? 'image/jpeg',
-            ),
+            fileOptions: FileOptions(contentType: mimeType ?? 'image/jpeg'),
           );
 
-      // Получаем публичный URL
       final imageUrl =
           _supabase.storage.from('chat-images').getPublicUrl(fileName);
-
       return imageUrl;
     } catch (e) {
       if (!mounted) return null;
-
       ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('Ошибка загрузки изображения: $e')),
-      );
+          SnackBar(content: Text('Ошибка загрузки изображения: $e')));
       return null;
     } finally {
-      if (mounted) {
-        setState(() {
-          _isUploadingImage = false;
-        });
-      }
+      if (mounted) setState(() => _isUploadingImage = false);
     }
   }
 
@@ -1114,19 +865,14 @@ class _ChatScreenState extends State<ChatScreen> with WidgetsBindingObserver {
         imageQuality: 70,
         maxWidth: 1440,
       );
-
       if (imageFile != null) {
         final imageUrl = await _uploadImage(imageFile);
-        if (imageUrl != null) {
-          await _sendImageMessage(imageUrl);
-        }
+        if (imageUrl != null) await _sendImageMessage(imageUrl);
       }
     } catch (e) {
       if (!mounted) return;
-
       ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('Ошибка выбора изображения: $e')),
-      );
+          SnackBar(content: Text('Ошибка выбора изображения: $e')));
     }
   }
 
@@ -1137,49 +883,33 @@ class _ChatScreenState extends State<ChatScreen> with WidgetsBindingObserver {
         imageQuality: 70,
         maxWidth: 1440,
       );
-
       if (imageFile != null) {
         final imageUrl = await _uploadImage(imageFile);
-        if (imageUrl != null) {
-          await _sendImageMessage(imageUrl);
-        }
+        if (imageUrl != null) await _sendImageMessage(imageUrl);
       }
     } catch (e) {
       if (!mounted) return;
-
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('Ошибка съемки фото: $e')),
-      );
+      ScaffoldMessenger.of(context)
+          .showSnackBar(SnackBar(content: Text('Ошибка съемки фото: $e')));
     }
   }
 
-  // Функция удаления отдельного сообщения
   Future<void> _deleteMessage(int messageId) async {
     try {
       await _supabase.from('messages').delete().eq('id', messageId);
-
-      // Удаляем сообщение из локального списка
-      setState(() {
-        _messages.removeWhere((message) => message['id'] == messageId);
-      });
-
-      // Обновляем локальное хранилище
+      setState(
+          () => _messages.removeWhere((message) => message['id'] == messageId));
       await _saveMessagesLocally();
-
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Сообщение удалено')),
-      );
+      ScaffoldMessenger.of(context)
+          .showSnackBar(const SnackBar(content: Text('Сообщение удалено')));
     } catch (e) {
       ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('Ошибка удаления сообщения: $e')),
-      );
+          SnackBar(content: Text('Ошибка удаления сообщения: $e')));
     }
   }
 
-  // Функция очистки всего чата
   Future<void> _clearAllMessages() async {
     try {
-      // Получаем все ID сообщений для удаления
       final List<int> messageIds = _messages
           .where((message) =>
               (message['sender_id'] == widget.currentUserId &&
@@ -1189,82 +919,70 @@ class _ChatScreenState extends State<ChatScreen> with WidgetsBindingObserver {
           .map((message) => message['id'] as int)
           .toList();
 
-      // Удаляем каждое сообщение
       for (int id in messageIds) {
         await _supabase.from('messages').delete().eq('id', id);
       }
-
-      // Очищаем локальный список
-      setState(() {
-        _messages.clear();
-      });
-
-      // Обновляем локальное хранилище
+      setState(() => _messages.clear());
       await _saveMessagesLocally();
-
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Весь чат очищен')),
-      );
+      ScaffoldMessenger.of(context)
+          .showSnackBar(const SnackBar(content: Text('Весь чат очищен')));
     } catch (e) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('Ошибка очистки чата: $e')),
-      );
+      ScaffoldMessenger.of(context)
+          .showSnackBar(SnackBar(content: Text('Ошибка очистки чата: $e')));
     }
   }
 
-  // Диалог подтверждения удаления всего чата
   void _showClearChatDialog() {
     showDialog(
       context: context,
-      builder: (BuildContext context) {
-        return AlertDialog(
-          title: const Text('Очистить весь чат?'),
-          content: const Text('Все сообщения будут удалены безвозвратно.'),
-          actions: [
-            TextButton(
+      builder: (BuildContext context) => AlertDialog(
+        title: const Text('Очистить весь чат?'),
+        content: const Text('Все сообщения будут удалены безвозвратно.'),
+        actions: [
+          TextButton(
               onPressed: () => Navigator.of(context).pop(),
-              child: const Text('Отмена'),
-            ),
-            TextButton(
+              child: const Text('Отмена')),
+          TextButton(
               onPressed: () {
                 Navigator.of(context).pop();
                 _clearAllMessages();
               },
-              child: const Text('Очистить'),
-            ),
-          ],
-        );
-      },
+              child: const Text('Очистить')),
+        ],
+      ),
     );
   }
 
-  // Диалог подтверждения удаления отдельного сообщения
   void _showDeleteMessageDialog(int messageId) {
     showDialog(
       context: context,
-      builder: (BuildContext context) {
-        return AlertDialog(
-          title: const Text('Удалить сообщение?'),
-          content: const Text('Это сообщение будет удалено безвозвратно.'),
-          actions: [
-            TextButton(
+      builder: (BuildContext context) => AlertDialog(
+        title: const Text('Удалить сообщение?'),
+        content: const Text('Это сообщение будет удалено безвозвратно.'),
+        actions: [
+          TextButton(
               onPressed: () => Navigator.of(context).pop(),
-              child: const Text('Отмена'),
-            ),
-            TextButton(
+              child: const Text('Отмена')),
+          TextButton(
               onPressed: () {
                 Navigator.of(context).pop();
                 _deleteMessage(messageId);
               },
-              child: const Text('Удалить'),
-            ),
-          ],
-        );
-      },
+              child: const Text('Удалить')),
+        ],
+      ),
     );
   }
 
-  Widget _buildMessageBubble(Map<String, dynamic> message) {
+  // Функция для группировки сообщений (Telegram-style)
+  bool _shouldShowAvatar(int index) {
+    if (index >= _messages.length - 1) return true;
+    final currentMessage = _messages[index];
+    final nextMessage = _messages[index + 1];
+    return currentMessage['sender_id'] != nextMessage['sender_id'];
+  }
+
+  Widget _buildMessageBubble(Map<String, dynamic> message, int index) {
     final isMe = message['sender_id'] == widget.currentUserId;
     final isImage = message['type'] == 'image';
     final userInfo = users[message['sender_id']] ??
@@ -1273,32 +991,96 @@ class _ChatScreenState extends State<ChatScreen> with WidgetsBindingObserver {
           'avatarColor': Colors.grey,
           'avatarText': '?'
         };
+    final showAvatar = !isMe && _shouldShowAvatar(index);
 
     if (isImage) {
-      // Сообщение с изображением
-      return ImageMessageBubble(
+      return TelegramImageMessageBubble(
         imageUrl: message['content'],
         isMe: isMe,
-        time: DateFormat('HH:mm').format(
-          DateTime.parse(message['created_at']).toLocal(),
-        ),
+        time: DateFormat('HH:mm')
+            .format(DateTime.parse(message['created_at']).toLocal()),
         userInfo: userInfo,
+        showAvatar: showAvatar,
         onDelete: () => _showDeleteMessageDialog(message['id']),
-        canDelete: isMe, // Только свои сообщения можно удалять
+        canDelete: isMe,
       );
     } else {
-      // Текстовое сообщение
-      return MessageBubble(
+      return TelegramMessageBubble(
         message: message['content'],
         isMe: isMe,
-        time: DateFormat('HH:mm').format(
-          DateTime.parse(message['created_at']).toLocal(),
-        ),
+        time: DateFormat('HH:mm')
+            .format(DateTime.parse(message['created_at']).toLocal()),
         userInfo: userInfo,
+        showAvatar: showAvatar,
         onDelete: () => _showDeleteMessageDialog(message['id']),
-        canDelete: isMe, // Только свои сообщения можно удалять
+        canDelete: isMe,
       );
     }
+  }
+
+  Widget _buildEmojiKeyboard() {
+    if (!_showEmojiKeyboard) return const SizedBox.shrink();
+
+    return Container(
+      height: 250,
+      color: Colors.white,
+      child: GridView.count(
+        crossAxisCount: 8,
+        children: List.generate(40, (index) {
+          final emojis = [
+            '😀',
+            '😂',
+            '🥰',
+            '😎',
+            '🤔',
+            '🙄',
+            '😴',
+            '🥳',
+            '😡',
+            '🤯',
+            '🤢',
+            '👋',
+            '👍',
+            '👏',
+            '🙏',
+            '💪',
+            '🐶',
+            '🐱',
+            '🐭',
+            '🐹',
+            '🐰',
+            '🦊',
+            '🐻',
+            '🐼',
+            '🎈',
+            '🎉',
+            '🎂',
+            '🍕',
+            '🍔',
+            '🍟',
+            '🌭',
+            '🍿',
+            '🥓',
+            '🥩',
+            '🍗',
+            '🍖',
+            '🍘',
+            '🍙',
+            '🍚',
+            '🍛'
+          ];
+          return GestureDetector(
+            onTap: () {
+              _messageController.text += emojis[index];
+            },
+            child: Container(
+              padding: const EdgeInsets.all(8),
+              child: Text(emojis[index], style: const TextStyle(fontSize: 24)),
+            ),
+          );
+        }),
+      ),
+    );
   }
 
   @override
@@ -1311,184 +1093,183 @@ class _ChatScreenState extends State<ChatScreen> with WidgetsBindingObserver {
         };
 
     return Scaffold(
+      backgroundColor: telegramBackground,
       appBar: AppBar(
-        title: Row(
-          children: [
-            CircleAvatar(
+        title: Row(children: [
+          CircleAvatar(
               backgroundColor: friendInfo['avatarColor'],
-              child: Text(
-                friendInfo['avatarText'],
-                style: const TextStyle(color: Colors.white),
-              ),
-            ),
-            const SizedBox(width: 12),
-            Text(
-              'Чат с ${friendInfo['name']}',
-              style: const TextStyle(color: Colors.white),
-            ),
-          ],
-        ),
-        backgroundColor: blue700,
+              child: Text(friendInfo['avatarText'],
+                  style: const TextStyle(color: Colors.white))),
+          const SizedBox(width: 12),
+          Text('${friendInfo['name']}',
+              style: const TextStyle(
+                  color: Colors.white, fontWeight: FontWeight.w500)),
+          const Spacer(),
+          const Icon(Icons.circle, color: Colors.green, size: 12),
+          const SizedBox(width: 4),
+          const Text('online',
+              style: TextStyle(color: Colors.white70, fontSize: 12)),
+        ]),
+        backgroundColor: telegramBlue,
         leading: IconButton(
           icon: const Icon(Icons.arrow_back, color: Colors.white),
           onPressed: () => Navigator.pushReplacement(
-            context,
-            MaterialPageRoute(
-                builder: (context) => const UserSelectionScreen()),
-          ),
+              context,
+              MaterialPageRoute(
+                  builder: (context) => const UserSelectionScreen())),
         ),
-        iconTheme: const IconThemeData(color: Colors.white),
         actions: [
-          // Кнопка очистки всего чата
           IconButton(
-            icon: const Icon(Icons.delete_sweep, color: Colors.white),
-            onPressed: _showClearChatDialog,
-            tooltip: 'Очистить весь чат',
-          ),
-          // Кнопка выхода к экрану пароля
+              icon: const Icon(Icons.videocam, color: Colors.white),
+              onPressed: () {},
+              tooltip: 'Видеозвонок'),
           IconButton(
-            icon: const Icon(Icons.logout, color: Colors.white),
-            onPressed: () {
-              Navigator.pushReplacement(
-                context,
-                MaterialPageRoute(builder: (context) => const PasswordScreen()),
-              );
-            },
-            tooltip: 'Выйти',
-          ),
+              icon: const Icon(Icons.call, color: Colors.white),
+              onPressed: () {},
+              tooltip: 'Аудиозвонок'),
+          IconButton(
+              icon: const Icon(Icons.more_vert, color: Colors.white),
+              onPressed: () {},
+              tooltip: 'Еще'),
         ],
       ),
-      body: Stack(
-        children: [
-          // Фоновое изображение из локальных ресурсов
-          Container(
-            decoration: BoxDecoration(
-              image: DecorationImage(
-                image: AssetImage('assets/chat_background.jpg'),
-                fit: BoxFit.cover,
-                colorFilter: ColorFilter.mode(
-                  Colors.black.withOpacity(0.8),
-                  BlendMode.darken,
+      body: Column(children: [
+        Expanded(
+          child: Stack(children: [
+            // Фоновый узор Telegram
+            Container(
+              decoration: const BoxDecoration(
+                image: DecorationImage(
+                  image: AssetImage(
+                      'assets/telegram_pattern.png'), // Добавьте текстуру Telegram
+                  fit: BoxFit.cover,
+                  opacity: 0.05,
                 ),
               ),
             ),
-          ),
-          Column(
-            children: [
-              Expanded(
-                child: _messages.isEmpty
-                    ? const Center(
-                        child: Text(
-                          'Нет сообщений',
-                          style: TextStyle(
-                            color: Colors.white70,
-                            fontSize: 18,
-                            fontWeight: FontWeight.bold,
-                          ),
-                        ),
-                      )
-                    : ListView.builder(
-                        controller: _scrollController,
-                        padding: const EdgeInsets.all(8),
-                        itemCount: _messages.length,
-                        itemBuilder: (context, index) {
-                          final message = _messages[index];
-                          return _buildMessageBubble(message);
-                        },
-                      ),
-              ),
-              if (_isUploadingImage)
-                const LinearProgressIndicator(
-                  backgroundColor: Colors.transparent,
-                  valueColor: AlwaysStoppedAnimation<Color>(Colors.white),
-                ),
-              Container(
-                decoration: BoxDecoration(
-                  color: Colors.white.withOpacity(0.8),
-                  borderRadius: const BorderRadius.only(
-                    topLeft: Radius.circular(20),
-                    topRight: Radius.circular(20),
+            _messages.isEmpty
+                ? const Center(
+                    child: Column(
+                        mainAxisAlignment: MainAxisAlignment.center,
+                        children: [
+                          Icon(Icons.chat_bubble_outline,
+                              size: 80, color: telegramDarkGrey),
+                          SizedBox(height: 16),
+                          Text('Нет сообщений',
+                              style: TextStyle(
+                                  color: telegramDarkGrey, fontSize: 18)),
+                          Text('Начните общение первым!',
+                              style: TextStyle(color: telegramDarkGrey)),
+                        ]),
+                  )
+                : ListView.builder(
+                    controller: _scrollController,
+                    padding: const EdgeInsets.all(8),
+                    itemCount: _messages.length,
+                    itemBuilder: (context, index) =>
+                        _buildMessageBubble(_messages[index], index),
                   ),
-                ),
-                padding: const EdgeInsets.all(8.0),
-                child: Row(
-                  children: [
-                    IconButton(
-                      icon: const Icon(Icons.photo_library, color: Colors.blue),
-                      onPressed: _pickImage,
-                      tooltip: 'Выбрать из галереи',
-                    ),
-                    IconButton(
-                      icon: const Icon(Icons.camera_alt, color: Colors.blue),
-                      onPressed: _takePhoto,
-                      tooltip: 'Сделать фото',
-                    ),
-                    Expanded(
-                      child: Container(
-                        decoration: BoxDecoration(
-                          color: Colors.white,
-                          borderRadius: BorderRadius.circular(24),
-                          boxShadow: [
-                            BoxShadow(
-                              color: Colors.grey.withOpacity(0.3),
-                              spreadRadius: 1,
-                              blurRadius: 3,
-                              offset: const Offset(0, 1),
-                            ),
-                          ],
-                        ),
-                        child: TextField(
-                          controller: _messageController,
-                          decoration: InputDecoration(
-                            hintText: 'Введите сообщение...',
-                            border: InputBorder.none,
-                            contentPadding: const EdgeInsets.symmetric(
-                              horizontal: 16,
-                              vertical: 12,
-                            ),
-                          ),
-                          onSubmitted: (_) => _sendMessage(),
-                        ),
-                      ),
-                    ),
-                    const SizedBox(width: 8),
-                    _isSending
-                        ? const CircularProgressIndicator(
-                            valueColor:
-                                AlwaysStoppedAnimation<Color>(Colors.blue),
-                          )
-                        : CircleAvatar(
-                            backgroundColor: Colors.blue,
-                            child: IconButton(
-                              icon: const Icon(Icons.send, color: Colors.white),
-                              onPressed: _sendMessage,
-                            ),
-                          ),
-                  ],
-                ),
-              ),
+            if (_isUploadingImage)
+              const Center(
+                  child: CircularProgressIndicator(
+                      valueColor: AlwaysStoppedAnimation<Color>(telegramBlue))),
+          ]),
+        ),
+        _buildEmojiKeyboard(),
+        Container(
+          decoration: BoxDecoration(
+            color: Colors.white,
+            boxShadow: [
+              BoxShadow(
+                  color: Colors.black.withOpacity(0.1),
+                  blurRadius: 4,
+                  offset: const Offset(0, -2))
             ],
           ),
-        ],
-      ),
+          padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 8),
+          child: Row(children: [
+            IconButton(
+              icon: Icon(
+                  _showEmojiKeyboard ? Icons.keyboard : Icons.emoji_emotions,
+                  color: telegramBlue),
+              onPressed: () =>
+                  setState(() => _showEmojiKeyboard = !_showEmojiKeyboard),
+              tooltip: 'Эмодзи',
+            ),
+            IconButton(
+                icon: const Icon(Icons.photo_library, color: telegramBlue),
+                onPressed: _pickImage,
+                tooltip: 'Галерея'),
+            IconButton(
+                icon: const Icon(Icons.camera_alt, color: telegramBlue),
+                onPressed: _takePhoto,
+                tooltip: 'Камера'),
+            Expanded(
+              child: Container(
+                decoration: BoxDecoration(
+                  color: telegramGrey,
+                  borderRadius: BorderRadius.circular(24),
+                ),
+                child: TextField(
+                  controller: _messageController,
+                  decoration: InputDecoration(
+                    hintText: 'Сообщение...',
+                    border: InputBorder.none,
+                    contentPadding: const EdgeInsets.symmetric(
+                        horizontal: 16, vertical: 12),
+                    suffixIcon: IconButton(
+                      icon: const Icon(Icons.attach_file,
+                          color: telegramDarkGrey),
+                      onPressed: () {},
+                      tooltip: 'Прикрепить файл',
+                    ),
+                  ),
+                  maxLines: 5,
+                  minLines: 1,
+                  onSubmitted: (_) => _sendMessage(),
+                ),
+              ),
+            ),
+            const SizedBox(width: 8),
+            _isSending
+                ? const Padding(
+                    padding: EdgeInsets.all(8),
+                    child: CircularProgressIndicator(strokeWidth: 2))
+                : IconButton(
+                    icon: Container(
+                      padding: const EdgeInsets.all(8),
+                      decoration: const BoxDecoration(
+                          color: telegramBlue, shape: BoxShape.circle),
+                      child:
+                          const Icon(Icons.send, color: Colors.white, size: 20),
+                    ),
+                    onPressed: _sendMessage,
+                    tooltip: 'Отправить',
+                  ),
+          ]),
+        ),
+      ]),
     );
   }
 }
 
-class MessageBubble extends StatelessWidget {
+// СТИЛЬ СООБЩЕНИЙ TELEGRAM
+class TelegramMessageBubble extends StatelessWidget {
   final String message;
   final bool isMe;
   final String time;
   final Map<String, dynamic> userInfo;
+  final bool showAvatar;
   final VoidCallback onDelete;
   final bool canDelete;
 
-  const MessageBubble({
+  const TelegramMessageBubble({
     super.key,
     required this.message,
     required this.isMe,
     required this.time,
     required this.userInfo,
+    required this.showAvatar,
     required this.onDelete,
     required this.canDelete,
   });
@@ -1496,81 +1277,85 @@ class MessageBubble extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Padding(
-      padding: const EdgeInsets.symmetric(vertical: 4),
+      padding: const EdgeInsets.symmetric(vertical: 2, horizontal: 8),
       child: Row(
         mainAxisAlignment:
             isMe ? MainAxisAlignment.end : MainAxisAlignment.start,
-        crossAxisAlignment: CrossAxisAlignment.end,
+        crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          if (!isMe)
+          if (!isMe && showAvatar)
             Padding(
-              padding: const EdgeInsets.only(right: 8),
+              padding: const EdgeInsets.only(right: 8, top: 2),
               child: CircleAvatar(
                 backgroundColor: userInfo['avatarColor'],
-                child: Text(
-                  userInfo['avatarText'],
-                  style: const TextStyle(color: Colors.white),
-                ),
+                radius: 16,
+                child: Text(userInfo['avatarText'],
+                    style: const TextStyle(color: Colors.white, fontSize: 12)),
               ),
-            ),
+            )
+          else if (!isMe)
+            const SizedBox(width: 32),
           Flexible(
             child: Column(
               crossAxisAlignment:
                   isMe ? CrossAxisAlignment.end : CrossAxisAlignment.start,
               children: [
-                if (!isMe)
+                if (!isMe && showAvatar)
                   Padding(
-                    padding: const EdgeInsets.only(bottom: 4, left: 12),
-                    child: Text(
-                      userInfo['name'],
-                      style: const TextStyle(
-                        fontSize: 12,
-                        fontWeight: FontWeight.w500,
-                        color: Colors.white,
-                        shadows: [
-                          Shadow(
-                            blurRadius: 3.0,
-                            color: Colors.black,
-                            offset: Offset(1.0, 1.0),
-                          ),
-                        ],
-                      ),
-                    ),
+                    padding: const EdgeInsets.only(left: 12, bottom: 2),
+                    child: Text(userInfo['name'],
+                        style: const TextStyle(
+                            color: telegramDarkGrey,
+                            fontSize: 12,
+                            fontWeight: FontWeight.w500)),
                   ),
                 GestureDetector(
                   onLongPress: canDelete ? onDelete : null,
                   child: Container(
-                    padding: const EdgeInsets.symmetric(
-                        horizontal: 16, vertical: 10),
+                    padding:
+                        const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
                     decoration: BoxDecoration(
-                      color: isMe
-                          ? Colors.blue.withOpacity(0.9)
-                          : Colors.white.withOpacity(0.9),
-                      borderRadius: BorderRadius.circular(16),
+                      color: isMe ? telegramBlue : Colors.white,
+                      borderRadius: BorderRadius.only(
+                        topLeft: const Radius.circular(12),
+                        topRight: const Radius.circular(12),
+                        bottomLeft: isMe
+                            ? const Radius.circular(12)
+                            : const Radius.circular(4),
+                        bottomRight: isMe
+                            ? const Radius.circular(4)
+                            : const Radius.circular(12),
+                      ),
                       boxShadow: [
                         BoxShadow(
-                          color: Colors.black.withOpacity(0.2),
-                          blurRadius: 4,
-                          offset: const Offset(0, 2),
+                          color: Colors.black.withOpacity(0.1),
+                          blurRadius: 2,
+                          offset: const Offset(0, 1),
                         ),
                       ],
                     ),
                     child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.end,
+                      crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
-                        Text(
-                          message,
-                          style: TextStyle(
-                            color: isMe ? Colors.white : Colors.black87,
-                          ),
-                        ),
+                        Text(message,
+                            style: TextStyle(
+                                color: isMe ? Colors.white : Colors.black,
+                                fontSize: 16)),
                         const SizedBox(height: 4),
-                        Text(
-                          time,
-                          style: TextStyle(
-                            fontSize: 10,
-                            color: isMe ? Colors.white70 : Colors.grey[600],
-                          ),
+                        Row(
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                            Text(time,
+                                style: TextStyle(
+                                    color: isMe
+                                        ? Colors.white70
+                                        : telegramDarkGrey,
+                                    fontSize: 12)),
+                            if (isMe) const SizedBox(width: 4),
+                            if (isMe)
+                              const Icon(Icons.done_all,
+                                  color: Colors.white70, size: 14),
+                          ],
                         ),
                       ],
                     ),
@@ -1579,38 +1364,29 @@ class MessageBubble extends StatelessWidget {
               ],
             ),
           ),
-          if (isMe)
-            Padding(
-              padding: const EdgeInsets.only(left: 8),
-              child: CircleAvatar(
-                backgroundColor: Colors.blue,
-                radius: 12,
-                child: Text(
-                  userInfo['avatarText'],
-                  style: const TextStyle(color: Colors.white, fontSize: 10),
-                ),
-              ),
-            ),
+          if (isMe) const SizedBox(width: 8),
         ],
       ),
     );
   }
 }
 
-class ImageMessageBubble extends StatelessWidget {
+class TelegramImageMessageBubble extends StatelessWidget {
   final String imageUrl;
   final bool isMe;
   final String time;
   final Map<String, dynamic> userInfo;
+  final bool showAvatar;
   final VoidCallback onDelete;
   final bool canDelete;
 
-  const ImageMessageBubble({
+  const TelegramImageMessageBubble({
     super.key,
     required this.imageUrl,
     required this.isMe,
     required this.time,
     required this.userInfo,
+    required this.showAvatar,
     required this.onDelete,
     required this.canDelete,
   });
@@ -1618,122 +1394,112 @@ class ImageMessageBubble extends StatelessWidget {
   void _showFullScreenImage(BuildContext context) {
     Navigator.of(context).push(
       MaterialPageRoute(
-        builder: (context) => FullScreenImageScreen(imageUrl: imageUrl),
-      ),
+          builder: (context) => FullScreenImageScreen(imageUrl: imageUrl)),
     );
   }
 
   @override
   Widget build(BuildContext context) {
     return Padding(
-      padding: const EdgeInsets.symmetric(vertical: 4),
+      padding: const EdgeInsets.symmetric(vertical: 2, horizontal: 8),
       child: Row(
         mainAxisAlignment:
             isMe ? MainAxisAlignment.end : MainAxisAlignment.start,
-        crossAxisAlignment: CrossAxisAlignment.end,
+        crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          if (!isMe)
+          if (!isMe && showAvatar)
             Padding(
-              padding: const EdgeInsets.only(right: 8),
+              padding: const EdgeInsets.only(right: 8, top: 2),
               child: CircleAvatar(
                 backgroundColor: userInfo['avatarColor'],
-                child: Text(
-                  userInfo['avatarText'],
-                  style: const TextStyle(color: Colors.white),
-                ),
+                radius: 16,
+                child: Text(userInfo['avatarText'],
+                    style: const TextStyle(color: Colors.white, fontSize: 12)),
               ),
-            ),
+            )
+          else if (!isMe)
+            const SizedBox(width: 32),
           Flexible(
             child: Column(
               crossAxisAlignment:
                   isMe ? CrossAxisAlignment.end : CrossAxisAlignment.start,
               children: [
-                if (!isMe)
+                if (!isMe && showAvatar)
                   Padding(
-                    padding: const EdgeInsets.only(bottom: 4, left: 12),
-                    child: Text(
-                      userInfo['name'],
-                      style: const TextStyle(
-                        fontSize: 12,
-                        fontWeight: FontWeight.w500,
-                        color: Colors.white,
-                        shadows: [
-                          Shadow(
-                            blurRadius: 3.0,
-                            color: Colors.black,
-                            offset: Offset(1.0, 1.0),
-                          ),
-                        ],
-                      ),
-                    ),
+                    padding: const EdgeInsets.only(left: 12, bottom: 2),
+                    child: Text(userInfo['name'],
+                        style: const TextStyle(
+                            color: telegramDarkGrey,
+                            fontSize: 12,
+                            fontWeight: FontWeight.w500)),
                   ),
                 GestureDetector(
                   onLongPress: canDelete ? onDelete : null,
                   child: Container(
-                    constraints: const BoxConstraints(maxWidth: 250),
+                    constraints: const BoxConstraints(maxWidth: 280),
                     decoration: BoxDecoration(
-                      color: isMe
-                          ? Colors.blue.withOpacity(0.9)
-                          : Colors.white.withOpacity(0.9),
-                      borderRadius: BorderRadius.circular(16),
+                      color: isMe ? telegramBlue : Colors.white,
+                      borderRadius: BorderRadius.only(
+                        topLeft: const Radius.circular(12),
+                        topRight: const Radius.circular(12),
+                        bottomLeft: isMe
+                            ? const Radius.circular(12)
+                            : const Radius.circular(4),
+                        bottomRight: isMe
+                            ? const Radius.circular(4)
+                            : const Radius.circular(12),
+                      ),
                       boxShadow: [
                         BoxShadow(
-                          color: Colors.black.withOpacity(0.2),
-                          blurRadius: 4,
-                          offset: const Offset(0, 2),
+                          color: Colors.black.withOpacity(0.1),
+                          blurRadius: 2,
+                          offset: const Offset(0, 1),
                         ),
                       ],
                     ),
                     child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.end,
+                      crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
                         GestureDetector(
                           onTap: () => _showFullScreenImage(context),
                           child: ClipRRect(
-                            borderRadius: BorderRadius.circular(12),
+                            borderRadius: const BorderRadius.only(
+                              topLeft: Radius.circular(12),
+                              topRight: Radius.circular(12),
+                            ),
                             child: Stack(
                               children: [
                                 Container(
-                                  width: 200,
+                                  width: 280,
                                   height: 200,
-                                  color: Colors.grey[200],
+                                  color: telegramGrey,
                                   child: const Center(
                                       child: CircularProgressIndicator()),
                                 ),
                                 CachedNetworkImage(
                                   imageUrl: imageUrl,
+                                  width: 280,
+                                  height: 200,
+                                  fit: BoxFit.cover,
                                   placeholder: (context, url) => Container(
-                                    width: 200,
-                                    height: 200,
-                                    color: Colors.grey[200],
-                                    child: const Center(
-                                        child: CircularProgressIndicator()),
-                                  ),
+                                      color: telegramGrey,
+                                      child: const Center(
+                                          child: CircularProgressIndicator())),
                                   errorWidget: (context, url, error) =>
                                       Container(
-                                    width: 200,
-                                    height: 200,
-                                    color: Colors.grey[200],
-                                    child: const Icon(Icons.error),
-                                  ),
-                                  fit: BoxFit.cover,
-                                  width: 200,
-                                  height: 200,
+                                          color: telegramGrey,
+                                          child: const Icon(Icons.error)),
                                 ),
                                 Positioned(
-                                  top: 8,
+                                  bottom: 8,
                                   right: 8,
                                   child: Container(
                                     padding: const EdgeInsets.all(4),
                                     decoration: BoxDecoration(
-                                      color: Colors.black.withOpacity(0.5),
-                                      shape: BoxShape.circle,
-                                    ),
-                                    child: const Icon(
-                                      Icons.fullscreen,
-                                      color: Colors.white,
-                                      size: 16,
-                                    ),
+                                        color: Colors.black.withOpacity(0.6),
+                                        borderRadius: BorderRadius.circular(4)),
+                                    child: const Icon(Icons.zoom_out_map,
+                                        color: Colors.white, size: 16),
                                   ),
                                 ),
                               ],
@@ -1741,13 +1507,21 @@ class ImageMessageBubble extends StatelessWidget {
                           ),
                         ),
                         Padding(
-                          padding: const EdgeInsets.all(8.0),
-                          child: Text(
-                            time,
-                            style: TextStyle(
-                              fontSize: 10,
-                              color: isMe ? Colors.white70 : Colors.grey[600],
-                            ),
+                          padding: const EdgeInsets.all(8),
+                          child: Row(
+                            mainAxisSize: MainAxisSize.min,
+                            children: [
+                              Text(time,
+                                  style: TextStyle(
+                                      color: isMe
+                                          ? Colors.white70
+                                          : telegramDarkGrey,
+                                      fontSize: 12)),
+                              if (isMe) const SizedBox(width: 4),
+                              if (isMe)
+                                const Icon(Icons.done_all,
+                                    color: Colors.white70, size: 14),
+                            ],
                           ),
                         ),
                       ],
@@ -1757,27 +1531,16 @@ class ImageMessageBubble extends StatelessWidget {
               ],
             ),
           ),
-          if (isMe)
-            Padding(
-              padding: const EdgeInsets.only(left: 8),
-              child: CircleAvatar(
-                backgroundColor: Colors.blue,
-                radius: 12,
-                child: Text(
-                  userInfo['avatarText'],
-                  style: const TextStyle(color: Colors.white, fontSize: 10),
-                ),
-              ),
-            ),
+          if (isMe) const SizedBox(width: 8),
         ],
       ),
     );
   }
 }
 
+// Полноэкранный просмотр изображения (оставляем без изменений)
 class FullScreenImageScreen extends StatefulWidget {
   final String imageUrl;
-
   const FullScreenImageScreen({super.key, required this.imageUrl});
 
   @override
@@ -1788,47 +1551,32 @@ class _FullScreenImageScreenState extends State<FullScreenImageScreen> {
   bool _isSaving = false;
 
   Future<void> _saveImage() async {
-    setState(() {
-      _isSaving = true;
-    });
-
+    setState(() => _isSaving = true);
     try {
       var status = await Permission.photos.request();
       if (!status.isGranted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(
-              content:
-                  Text('Необходимо разрешение для сохранения изображений')),
-        );
+        ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
+            content: Text('Необходимо разрешение для сохранения изображений')));
         return;
       }
-
       final response = await http.get(Uri.parse(widget.imageUrl));
-      final bytes = response.bodyBytes;
-
       final result = await ImageGallerySaver.saveImage(
-        Uint8List.fromList(bytes),
+        Uint8List.fromList(response.bodyBytes),
         quality: 100,
         name: "chat_image_${DateTime.now().millisecondsSinceEpoch}",
       );
-
       if (result['isSuccess']) {
         ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('Изображение сохранено в галерею')),
-        );
+            const SnackBar(content: Text('Изображение сохранено в галерею')));
       } else {
         ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('Не удалось сохранить изображение')),
-        );
+            const SnackBar(content: Text('Не удалось сохранить изображение')));
       }
     } catch (e) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('Ошибка сохранения: $e')),
-      );
+      ScaffoldMessenger.of(context)
+          .showSnackBar(SnackBar(content: Text('Ошибка сохранения: $e')));
     } finally {
-      setState(() {
-        _isSaving = false;
-      });
+      setState(() => _isSaving = false);
     }
   }
 
@@ -1837,61 +1585,50 @@ class _FullScreenImageScreenState extends State<FullScreenImageScreen> {
     return Scaffold(
       backgroundColor: Colors.black,
       body: SafeArea(
-        child: Stack(
-          children: [
-            PhotoView(
-              imageProvider: NetworkImage(widget.imageUrl),
-              minScale: PhotoViewComputedScale.contained,
-              maxScale: PhotoViewComputedScale.covered * 4,
-              heroAttributes: PhotoViewHeroAttributes(tag: widget.imageUrl),
-              loadingBuilder: (context, event) => Center(
+        child: Stack(children: [
+          PhotoView(
+            imageProvider: NetworkImage(widget.imageUrl),
+            minScale: PhotoViewComputedScale.contained,
+            maxScale: PhotoViewComputedScale.covered * 4,
+            heroAttributes: PhotoViewHeroAttributes(tag: widget.imageUrl),
+            loadingBuilder: (context, event) => Center(
                 child: Container(
-                  width: 100,
-                  height: 100,
-                  child: const CircularProgressIndicator(),
-                ),
-              ),
-              errorBuilder: (context, error, stackTrace) => Center(
-                child: Column(
+                    width: 100,
+                    height: 100,
+                    child: const CircularProgressIndicator())),
+            errorBuilder: (context, error, stackTrace) => Center(
+              child: Column(
                   mainAxisAlignment: MainAxisAlignment.center,
                   children: [
                     const Icon(Icons.error, color: Colors.white, size: 50),
                     const SizedBox(height: 16),
-                    const Text(
-                      'Не удалось загрузить изображение',
-                      style: TextStyle(color: Colors.white),
-                    ),
+                    const Text('Не удалось загрузить изображение',
+                        style: TextStyle(color: Colors.white)),
                     const SizedBox(height: 8),
                     TextButton(
-                      onPressed: () => Navigator.of(context).pop(),
-                      child: const Text('Назад',
-                          style: TextStyle(color: Colors.white)),
-                    ),
-                  ],
-                ),
-              ),
+                        onPressed: () => Navigator.of(context).pop(),
+                        child: const Text('Назад',
+                            style: TextStyle(color: Colors.white))),
+                  ]),
             ),
-            Positioned(
+          ),
+          Positioned(
               top: 16,
               left: 16,
               child: IconButton(
-                icon: const Icon(Icons.arrow_back, color: Colors.white),
-                onPressed: () => Navigator.of(context).pop(),
-              ),
-            ),
-            Positioned(
-              top: 16,
-              right: 16,
-              child: _isSaving
-                  ? const CircularProgressIndicator(
-                      valueColor: AlwaysStoppedAnimation<Color>(Colors.white))
-                  : IconButton(
-                      icon: const Icon(Icons.download, color: Colors.white),
-                      onPressed: _saveImage,
-                    ),
-            ),
-          ],
-        ),
+                  icon: const Icon(Icons.arrow_back, color: Colors.white),
+                  onPressed: () => Navigator.of(context).pop())),
+          Positioned(
+            top: 16,
+            right: 16,
+            child: _isSaving
+                ? const CircularProgressIndicator(
+                    valueColor: AlwaysStoppedAnimation<Color>(Colors.white))
+                : IconButton(
+                    icon: const Icon(Icons.download, color: Colors.white),
+                    onPressed: _saveImage),
+          ),
+        ]),
       ),
     );
   }
