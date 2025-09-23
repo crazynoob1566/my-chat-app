@@ -214,7 +214,7 @@ class _PasswordScreenState extends State<PasswordScreen> {
                   const SizedBox(height: 20),
                   Text(
                     _isFirstLaunch
-                        ? 'Установите пароль'
+                        ? 'Установит пароль'
                         : '𝕊𝕒𝕝𝕒𝕞 𝕡𝕠𝕡𝕠𝕝𝕒𝕞',
                     style: const TextStyle(
                       fontSize: 24,
