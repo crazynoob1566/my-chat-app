@@ -279,7 +279,9 @@ class _PasswordScreenState extends State<PasswordScreen> {
 
                       // Заголовок
                       Text(
-                        _isFirstLaunch ? 'Создайте пароль' : 'Babula Chat',
+                        _isFirstLaunch
+                            ? 'Создайте пароль'
+                            : '𝕊𝕒𝕝𝕒𝕞 𝕡𝕠𝕡𝕠𝕝𝕒𝕞',
                         style: const TextStyle(
                           fontSize: 28,
                           fontWeight: FontWeight.bold,
@@ -291,9 +293,7 @@ class _PasswordScreenState extends State<PasswordScreen> {
                       const SizedBox(height: 8),
 
                       Text(
-                        _isFirstLaunch
-                            ? 'Для защиты ваших сообщений'
-                            : 'Безопасный чат',
+                        _isFirstLaunch ? 'Для защиты ваших сообщений' : '',
                         style: TextStyle(
                           fontSize: 16,
                           color: Colors.white.withOpacity(0.8),
@@ -316,7 +316,7 @@ class _PasswordScreenState extends State<PasswordScreen> {
                           obscureText: _obscurePassword,
                           style: const TextStyle(color: Colors.white),
                           decoration: InputDecoration(
-                            hintText: 'Введите пароль',
+                            hintText: 'Enter your password',
                             hintStyle:
                                 TextStyle(color: Colors.white.withOpacity(0.6)),
                             border: InputBorder.none,
@@ -409,7 +409,7 @@ class _PasswordScreenState extends State<PasswordScreen> {
                             ),
                           ),
                           child: Text(
-                            _isFirstLaunch ? 'Создать пароль' : 'Войти в чат',
+                            _isFirstLaunch ? 'Создать пароль' : 'ℝ𝕦𝕟',
                             style: const TextStyle(
                               fontSize: 18,
                               fontWeight: FontWeight.w600,
