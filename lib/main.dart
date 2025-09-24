@@ -425,7 +425,7 @@ class _PasswordScreenState extends State<PasswordScreen> {
                       Text(
                         _isFirstLaunch
                             ? 'Пароль должен содержать не менее 4 символов'
-                            : 'Введите пароль для доступа к чату',
+                            : '',
                         style: TextStyle(
                           fontSize: 12,
                           color: Colors.white.withOpacity(0.6),
