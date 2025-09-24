@@ -259,13 +259,6 @@ class _PasswordScreenState extends State<PasswordScreen> {
                         ),
                         child: Stack(
                           children: [
-                            Center(
-                              child: Icon(
-                                Icons.chat_bubble_rounded,
-                                size: 60,
-                                color: Color(0xFF667eea),
-                              ),
-                            ),
                             // Анимация пульсации
                             Positioned.fill(
                               child: TweenAnimationBuilder(
