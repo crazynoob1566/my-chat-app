@@ -251,6 +251,11 @@ class _PasswordScreenState extends State<PasswordScreen> {
                               offset: const Offset(0, 10),
                             ),
                           ],
+                          image: DecorationImage(
+                            image: AssetImage(
+                                'assets/images/app_logo.png'), // Ваш логотип
+                            fit: BoxFit.cover,
+                          ),
                         ),
                         child: Stack(
                           children: [
