@@ -817,31 +817,33 @@ class _ChatScreenState extends State<ChatScreen> with WidgetsBindingObserver {
         'type': 'text',
       };
 
-      // Если это ответ на сообщение, добавляем информацию о родительском сообщении
-      if (_replyingToMessage != null) {
-        // Убеждаемся, что ID преобразован в правильный тип
-        messageData['parent_message_id'] = _replyingToMessage!['id'] is int
-            ? _replyingToMessage!['id']
-            : int.tryParse(_replyingToMessage!['id'].toString()) ?? 0;
-        messageData['parent_message_content'] =
-            _replyingToMessage!['content']?.toString() ?? '';
-        messageData['parent_sender_id'] =
-            _replyingToMessage!['sender_id']?.toString() ?? '';
-      }
+      // Для отладки - выводим данные перед отправкой
+      print('Отправляемые данные: $messageData');
+
+      // Временно убираем функциональность ответов для тестирования
+      // if (_replyingToMessage != null) {
+      //   messageData['parent_message_id'] = _replyingToMessage!['id'].toString();
+      //   messageData['parent_message_content'] = _replyingToMessage!['content']?.toString() ?? '';
+      //   messageData['parent_sender_id'] = _replyingToMessage!['sender_id']?.toString() ?? '';
+      // }
 
       final response =
           await _supabase.from('messages').insert(messageData).select();
 
+      print('Ответ от Supabase: $response');
+
       if (response != null && response.isNotEmpty) {
         _messageController.clear();
-        _cancelReply(); // Сбрасываем ответ после отправки
+        _cancelReply();
         print('Сообщение отправлено успешно');
       }
     } catch (e) {
-      print('Ошибка отправки: $e');
+      print('Полная ошибка отправки: $e');
+      print('Тип ошибки: ${e.runtimeType}');
+
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('Ошибка отправки: $e')),
+        SnackBar(content: Text('Ошибка отправки: ${e.toString()}')),
       );
     } finally {
       if (mounted) {
@@ -849,6 +851,24 @@ class _ChatScreenState extends State<ChatScreen> with WidgetsBindingObserver {
           _isSending = false;
         });
       }
+    }
+  }
+
+  // Добавьте этот метод для тестирования базовой отправки
+  void _testSimpleMessage() async {
+    try {
+      final testData = {
+        'sender_id': 'user1',
+        'receiver_id': 'user2',
+        'content': 'Тестовое сообщение',
+        'type': 'text',
+      };
+
+      final response =
+          await _supabase.from('messages').insert(testData).select();
+      print('Тестовая отправка: $response');
+    } catch (e) {
+      print('Тестовая ошибка: $e');
     }
   }
 
