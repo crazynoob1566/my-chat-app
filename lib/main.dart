@@ -785,18 +785,25 @@ class _ChatScreenState extends State<ChatScreen> with WidgetsBindingObserver {
   // Функция ответа на сообщение
   void _replyToMessage(Map<String, dynamic> message) {
     setState(() {
-      _replyingToMessage = message;
+      _replyingToMessage = {
+        'id': message['id'].toString(), // Преобразуем в строку
+        'content': message['content']?.toString() ?? '',
+        'sender_id': message['sender_id']?.toString() ?? '',
+        'type': message['type']?.toString() ?? 'text',
+      };
     });
     _messageFocusNode.requestFocus();
+    _scrollToBottom();
   }
 
-  // Функция отмены ответа
+  // Метод отмены ответа на сообщение
   void _cancelReply() {
     setState(() {
       _replyingToMessage = null;
     });
   }
 
+// Метод отправки сообщения с ответом
   Future<void> _sendMessage() async {
     final String content = _messageController.text.trim();
     if (content.isEmpty) return;
@@ -817,15 +824,16 @@ class _ChatScreenState extends State<ChatScreen> with WidgetsBindingObserver {
         'type': 'text',
       };
 
-      // Для отладки - выводим данные перед отправкой
-      print('Отправляемые данные: $messageData');
+      // Добавляем информацию о родительском сообщении, если есть ответ
+      if (_replyingToMessage != null) {
+        messageData['parent_message_id'] = _replyingToMessage!['id'];
+        messageData['parent_message_content'] = _replyingToMessage!['content'];
+        messageData['parent_sender_id'] = _replyingToMessage!['sender_id'];
 
-      // Временно убираем функциональность ответов для тестирования
-      // if (_replyingToMessage != null) {
-      //   messageData['parent_message_id'] = _replyingToMessage!['id'].toString();
-      //   messageData['parent_message_content'] = _replyingToMessage!['content']?.toString() ?? '';
-      //   messageData['parent_sender_id'] = _replyingToMessage!['sender_id']?.toString() ?? '';
-      // }
+        print('Отправка ответа на сообщение: ${_replyingToMessage}');
+      }
+
+      print('Отправляемые данные: $messageData');
 
       final response =
           await _supabase.from('messages').insert(messageData).select();
@@ -838,9 +846,7 @@ class _ChatScreenState extends State<ChatScreen> with WidgetsBindingObserver {
         print('Сообщение отправлено успешно');
       }
     } catch (e) {
-      print('Полная ошибка отправки: $e');
-      print('Тип ошибки: ${e.runtimeType}');
-
+      print('Ошибка отправки: $e');
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(content: Text('Ошибка отправки: ${e.toString()}')),
@@ -854,24 +860,7 @@ class _ChatScreenState extends State<ChatScreen> with WidgetsBindingObserver {
     }
   }
 
-  // Добавьте этот метод для тестирования базовой отправки
-  void _testSimpleMessage() async {
-    try {
-      final testData = {
-        'sender_id': 'user1',
-        'receiver_id': 'user2',
-        'content': 'Тестовое сообщение',
-        'type': 'text',
-      };
-
-      final response =
-          await _supabase.from('messages').insert(testData).select();
-      print('Тестовая отправка: $response');
-    } catch (e) {
-      print('Тестовая ошибка: $e');
-    }
-  }
-
+// Метод отправки изображения с ответом
   Future<void> _sendImageMessage(String imageUrl) async {
     try {
       final messageData = {
@@ -882,14 +871,9 @@ class _ChatScreenState extends State<ChatScreen> with WidgetsBindingObserver {
       };
 
       if (_replyingToMessage != null) {
-        // Убеждаемся, что ID преобразован в правильный тип
-        messageData['parent_message_id'] = _replyingToMessage!['id'] is int
-            ? _replyingToMessage!['id']
-            : int.tryParse(_replyingToMessage!['id'].toString()) ?? 0;
-        messageData['parent_message_content'] =
-            _replyingToMessage!['content']?.toString() ?? '';
-        messageData['parent_sender_id'] =
-            _replyingToMessage!['sender_id']?.toString() ?? '';
+        messageData['parent_message_id'] = _replyingToMessage!['id'];
+        messageData['parent_message_content'] = _replyingToMessage!['content'];
+        messageData['parent_sender_id'] = _replyingToMessage!['sender_id'];
       }
 
       final response =
@@ -1125,7 +1109,7 @@ class _ChatScreenState extends State<ChatScreen> with WidgetsBindingObserver {
     final hasParentMessage = message['parent_message_id'] != null;
 
     return MessageBubble(
-      message: message['content'],
+      message: message['content'] ?? '',
       isMe: isMe,
       time: DateFormat('HH:mm')
           .format(DateTime.parse(message['created_at']).toLocal()),
@@ -1136,8 +1120,9 @@ class _ChatScreenState extends State<ChatScreen> with WidgetsBindingObserver {
       isImage: isImage,
       parentMessage: hasParentMessage
           ? {
-              'content': message['parent_message_content'],
-              'sender_id': message['parent_sender_id'],
+              'parent_message_id': message['parent_message_id'],
+              'parent_message_content': message['parent_message_content'],
+              'parent_sender_id': message['parent_sender_id'],
             }
           : null,
       users: users,
@@ -1202,8 +1187,9 @@ class _ChatScreenState extends State<ChatScreen> with WidgetsBindingObserver {
   Widget _buildReplyPreview() {
     if (_replyingToMessage == null) return const SizedBox.shrink();
 
-    final isMe = _replyingToMessage!['sender_id'] == widget.currentUserId;
-    final userInfo = users[_replyingToMessage!['sender_id']] ??
+    final isReplyingToMe =
+        _replyingToMessage!['sender_id'] == widget.currentUserId;
+    final replyUserInfo = users[_replyingToMessage!['sender_id']] ??
         {
           'name': _replyingToMessage!['sender_id'],
           'avatarColor': Colors.grey,
@@ -1213,18 +1199,20 @@ class _ChatScreenState extends State<ChatScreen> with WidgetsBindingObserver {
       padding: const EdgeInsets.all(12),
       decoration: BoxDecoration(
         color: Colors.blue.withOpacity(0.1),
-        border: Border(
+        border: const Border(
           left: BorderSide(color: Colors.blue, width: 4),
         ),
       ),
       child: Row(
         children: [
+          Icon(Icons.reply, color: Colors.blue, size: 16),
+          const SizedBox(width: 8),
           Expanded(
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
                 Text(
-                  'Ответ на сообщение ${isMe ? 'вам' : userInfo['name']}',
+                  'Ответ на сообщение ${isReplyingToMe ? 'вам' : replyUserInfo['name']}',
                   style: const TextStyle(
                     fontSize: 12,
                     fontWeight: FontWeight.bold,
@@ -1233,7 +1221,9 @@ class _ChatScreenState extends State<ChatScreen> with WidgetsBindingObserver {
                 ),
                 const SizedBox(height: 4),
                 Text(
-                  _replyingToMessage!['content'],
+                  _replyingToMessage!['type'] == 'image'
+                      ? '📷 Фото'
+                      : (_replyingToMessage!['content'] ?? ''),
                   style: const TextStyle(fontSize: 12),
                   maxLines: 1,
                   overflow: TextOverflow.ellipsis,
@@ -1243,7 +1233,7 @@ class _ChatScreenState extends State<ChatScreen> with WidgetsBindingObserver {
           ),
           IconButton(
             icon: const Icon(Icons.close, size: 16),
-            onPressed: _cancelReply,
+            onPressed: _cancelReply, // Исправлено здесь
           ),
         ],
       ),
@@ -1481,8 +1471,7 @@ class MessageBubble extends StatelessWidget {
       context: context,
       builder: (context) {
         return SafeArea(
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
+          child: Wrap(
             children: [
               ListTile(
                 leading: const Icon(Icons.reply),
@@ -1512,10 +1501,10 @@ class MessageBubble extends StatelessWidget {
   Widget _buildParentMessagePreview() {
     if (parentMessage == null) return const SizedBox.shrink();
 
-    final isParentMe = parentMessage!['sender_id'] == userInfo['name'];
-    final parentUserInfo = users[parentMessage!['sender_id']] ??
+    final isParentMe = parentMessage!['parent_sender_id'] == userInfo['name'];
+    final parentUserInfo = users[parentMessage!['parent_sender_id']] ??
         {
-          'name': parentMessage!['sender_id'],
+          'name': parentMessage!['parent_sender_id'],
           'avatarColor': Colors.grey,
         };
 
@@ -1523,27 +1512,35 @@ class MessageBubble extends StatelessWidget {
       margin: const EdgeInsets.only(bottom: 8),
       padding: const EdgeInsets.all(8),
       decoration: BoxDecoration(
-        color: Colors.grey.withOpacity(0.2),
+        color: (isMe ? Colors.white : Colors.blue).withOpacity(0.2),
         borderRadius: BorderRadius.circular(8),
-        border: Border.all(color: Colors.grey.withOpacity(0.3)),
+        border: Border.all(
+            color: (isMe ? Colors.grey : Colors.blue).withOpacity(0.3)),
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Text(
-            isParentMe ? 'Вы' : parentUserInfo['name'],
-            style: TextStyle(
-              fontSize: 12,
-              fontWeight: FontWeight.bold,
-              color: isMe ? Colors.white70 : Colors.black87,
-            ),
+          Row(
+            children: [
+              Icon(Icons.reply,
+                  size: 12, color: isMe ? Colors.grey : Colors.blue),
+              const SizedBox(width: 4),
+              Text(
+                isParentMe ? 'Вы' : parentUserInfo['name'],
+                style: TextStyle(
+                  fontSize: 11,
+                  fontWeight: FontWeight.bold,
+                  color: isMe ? Colors.grey : Colors.blue,
+                ),
+              ),
+            ],
           ),
           const SizedBox(height: 2),
           Text(
-            parentMessage!['content'],
+            parentMessage!['parent_message_content'] ?? '',
             style: TextStyle(
-              fontSize: 12,
-              color: isMe ? Colors.white70 : Colors.black54,
+              fontSize: 11,
+              color: isMe ? Colors.grey : Colors.blue,
             ),
             maxLines: 2,
             overflow: TextOverflow.ellipsis,
@@ -1619,9 +1616,7 @@ class MessageBubble extends StatelessWidget {
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
                         _buildParentMessagePreview(),
-                        if (isImage)
-                          // ... код для изображений
-                          Text('📷 Фото'),
+                        if (isImage) Text('📷 Фото'),
                         if (!isImage)
                           Text(
                             message,
