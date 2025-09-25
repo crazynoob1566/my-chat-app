@@ -516,6 +516,7 @@ class _ChatScreenState extends State<ChatScreen> with WidgetsBindingObserver {
     _supabase = Supabase.instance.client;
     _initializeChannels();
     _loadMessages();
+    _startMessageStatusChecker();
   }
 
   void _initializeChannels() {
@@ -632,6 +633,7 @@ class _ChatScreenState extends State<ChatScreen> with WidgetsBindingObserver {
   }
 
   @override
+  @override
   void didChangeAppLifecycleState(AppLifecycleState state) {
     if (state == AppLifecycleState.paused) {
       _messagesChannel.unsubscribe();
@@ -639,6 +641,12 @@ class _ChatScreenState extends State<ChatScreen> with WidgetsBindingObserver {
     } else if (state == AppLifecycleState.resumed) {
       _loadMessages();
       _subscribeToMessages();
+
+      // Отмечаем все непрочитанные сообщения как прочитанные при открытии чата
+      final unreadIds = _getUnreadMessageIds();
+      if (unreadIds.isNotEmpty) {
+        _markMessagesAsRead(unreadIds);
+      }
     }
   }
 
@@ -695,54 +703,25 @@ class _ChatScreenState extends State<ChatScreen> with WidgetsBindingObserver {
     try {
       _messagesChannel
           .onPostgresChanges(
-        event: PostgresChangeEvent.insert,
+        event: PostgresChangeEvent.all, // Слушаем все события
         schema: 'public',
         table: 'messages',
         callback: (payload) async {
           final newMessage = payload.newRecord;
-          print('Получено новое сообщение: $newMessage');
+          final oldMessage = payload.oldRecord;
 
-          // Проверяем, относится ли сообщение к текущему чату
-          if ((newMessage['sender_id'] == widget.currentUserId &&
-                  newMessage['receiver_id'] == widget.friendId) ||
-              (newMessage['sender_id'] == widget.friendId &&
-                  newMessage['receiver_id'] == widget.currentUserId)) {
-            // Проверяем, нет ли уже такого сообщения
-            bool messageExists = _messages.any((msg) {
-              final msgId = msg['id'] is int
-                  ? msg['id']
-                  : int.tryParse(msg['id'].toString());
-              final newMsgId = newMessage['id'] is int
-                  ? newMessage['id']
-                  : int.tryParse(newMessage['id'].toString());
-              return msgId == newMsgId;
-            });
-
-            if (!messageExists) {
-              setState(() {
-                _messages.add(newMessage);
-              });
-
-              await _saveMessagesLocally();
-
-              WidgetsBinding.instance.addPostFrameCallback((_) {
-                _scrollToBottom();
-              });
-
-              // Уведомление для входящих сообщений
-              if (newMessage['sender_id'] != widget.currentUserId) {
-                final messageContent = newMessage['type'] == 'image'
-                    ? '📷 Фото'
-                    : newMessage['content'];
-
-                // Показываем уведомление
-                _showNotification(
-                  'Новое сообщение от ${users[newMessage['sender_id']]?['name'] ?? 'Unknown'}',
-                  messageContent,
-                );
-              }
-            }
+          // Обработка разных типов событий
+          if (payload.eventType == 'INSERT') {
+            print('Получено новое сообщение: $newMessage');
+            _handleNewMessage(newMessage);
+          } else if (payload.eventType == 'UPDATE') {
+            print('Обновлено сообщение: $newMessage');
+            _handleUpdatedMessage(newMessage, oldMessage);
+          } else if (payload.eventType == 'DELETE') {
+            print('Удалено сообщение: $oldMessage');
+            // Обработка удаления сообщений
           }
+          // Для PostgresChangeEvent.all не нужно отдельное условие
         },
       )
           .subscribe((status, error) {
@@ -754,6 +733,64 @@ class _ChatScreenState extends State<ChatScreen> with WidgetsBindingObserver {
       });
     } catch (e) {
       print('Ошибка подписки на сообщения: $e');
+    }
+  }
+
+  void _handleNewMessage(Map<String, dynamic> newMessage) {
+    // Проверяем, относится ли сообщение к текущему чату
+    if ((newMessage['sender_id'] == widget.currentUserId &&
+            newMessage['receiver_id'] == widget.friendId) ||
+        (newMessage['sender_id'] == widget.friendId &&
+            newMessage['receiver_id'] == widget.currentUserId)) {
+      // Проверяем, нет ли уже такого сообщения
+      bool messageExists = _messages.any((msg) {
+        final msgId =
+            msg['id'] is int ? msg['id'] : int.tryParse(msg['id'].toString());
+        final newMsgId = newMessage['id'] is int
+            ? newMessage['id']
+            : int.tryParse(newMessage['id'].toString());
+        return msgId == newMsgId;
+      });
+
+      if (!messageExists) {
+        setState(() {
+          _messages.add(newMessage);
+        });
+
+        _saveMessagesLocally();
+
+        WidgetsBinding.instance.addPostFrameCallback((_) {
+          _scrollToBottom();
+        });
+
+        // Уведомление для входящих сообщений
+        if (newMessage['sender_id'] != widget.currentUserId) {
+          final messageContent =
+              newMessage['type'] == 'image' ? '📷 Фото' : newMessage['content'];
+
+          _showNotification(
+            'Новое сообщение от ${users[newMessage['sender_id']]?['name'] ?? 'Unknown'}',
+            messageContent,
+          );
+
+          // Отмечаем как прочитанное, если чат активен
+          if (WidgetsBinding.instance.lifecycleState ==
+              AppLifecycleState.resumed) {
+            _markMessagesAsRead([newMessage['id'] as int]);
+          }
+        }
+      }
+    }
+  }
+
+  void _handleUpdatedMessage(
+      Map<String, dynamic> newMessage, Map<String, dynamic>? oldMessage) {
+    final index = _messages.indexWhere((msg) => msg['id'] == newMessage['id']);
+    if (index != -1) {
+      setState(() {
+        _messages[index] = newMessage;
+      });
+      _saveMessagesLocally();
     }
   }
 
@@ -803,6 +840,87 @@ class _ChatScreenState extends State<ChatScreen> with WidgetsBindingObserver {
     });
   }
 
+  // Метод для отметки сообщений как доставленных
+  // Метод для отметки сообщений как доставленных
+  Future<void> _markMessagesAsDelivered(List<int> messageIds) async {
+    if (messageIds.isEmpty) return;
+
+    try {
+      // Создаем условие OR для всех ID
+      String orCondition = messageIds.map((id) => 'id.eq.$id').join(',');
+      await _supabase.from('messages').update({
+        'delivered_at': DateTime.now().toIso8601String(),
+      }).or(orCondition);
+    } catch (e) {
+      print('Ошибка отметки доставки: $e');
+    }
+  }
+
+// Метод для отметки сообщений как прочитанных
+  Future<void> _markMessagesAsRead(List<int> messageIds) async {
+    if (messageIds.isEmpty) return;
+
+    try {
+      // Создаем условие OR для всех ID
+      String orCondition = messageIds.map((id) => 'id.eq.$id').join(',');
+      await _supabase.from('messages').update({
+        'read_at': DateTime.now().toIso8601String(),
+      }).or(orCondition);
+    } catch (e) {
+      print('Ошибка отметки прочтения: $e');
+    }
+  }
+
+// Метод проверки непрочитанных сообщений
+  List<int> _getUnreadMessageIds() {
+    return _messages
+        .where((message) {
+          return message['sender_id'] ==
+                  widget.friendId && // Сообщения от друга
+              message['receiver_id'] ==
+                  widget.currentUserId && // Адресованы мне
+              message['read_at'] == null; // Еще не прочитаны
+        })
+        .map((message) => message['id'] as int)
+        .toList();
+  }
+
+// Метод проверки недоставленных сообщений
+  List<int> _getUndeliveredMessageIds() {
+    return _messages
+        .where((message) {
+          return message['sender_id'] ==
+                  widget.currentUserId && // Мои сообщения
+              message['receiver_id'] == widget.friendId && // Адресованы другу
+              message['delivered_at'] == null; // Еще не доставлены
+        })
+        .map((message) => message['id'] as int)
+        .toList();
+  }
+
+// Метод для периодической проверки статуса сообщений
+  void _startMessageStatusChecker() {
+    Timer.periodic(const Duration(seconds: 5), (timer) {
+      if (!mounted) {
+        timer.cancel();
+        return;
+      }
+
+      // Отмечаем сообщения как доставленные
+      final undeliveredIds = _getUndeliveredMessageIds();
+      if (undeliveredIds.isNotEmpty) {
+        _markMessagesAsDelivered(undeliveredIds);
+      }
+
+      // Отмечаем сообщения как прочитанные, если чат активен
+      final unreadIds = _getUnreadMessageIds();
+      if (unreadIds.isNotEmpty &&
+          WidgetsBinding.instance.lifecycleState == AppLifecycleState.resumed) {
+        _markMessagesAsRead(unreadIds);
+      }
+    });
+  }
+
 // Метод отправки сообщения с ответом
   Future<void> _sendMessage() async {
     final String content = _messageController.text.trim();
@@ -822,6 +940,8 @@ class _ChatScreenState extends State<ChatScreen> with WidgetsBindingObserver {
         'receiver_id': widget.friendId,
         'content': content,
         'type': 'text',
+        'delivered_at': null, // Добавляем эту строку
+        'read_at': null, // Добавляем эту строку
       };
 
       // Добавляем информацию о родительском сообщении, если есть ответ
@@ -829,8 +949,6 @@ class _ChatScreenState extends State<ChatScreen> with WidgetsBindingObserver {
         messageData['parent_message_id'] = _replyingToMessage!['id'];
         messageData['parent_message_content'] = _replyingToMessage!['content'];
         messageData['parent_sender_id'] = _replyingToMessage!['sender_id'];
-
-        print('Отправка ответа на сообщение: ${_replyingToMessage}');
       }
 
       print('Отправляемые данные: $messageData');
@@ -869,6 +987,8 @@ class _ChatScreenState extends State<ChatScreen> with WidgetsBindingObserver {
         'receiver_id': widget.friendId,
         'content': imageUrl,
         'type': 'image',
+        'delivered_at': null, // Добавляем эту строку
+        'read_at': null, // Добавляем эту строку
       };
 
       if (_replyingToMessage != null) {
@@ -1105,6 +1225,14 @@ class _ChatScreenState extends State<ChatScreen> with WidgetsBindingObserver {
 
     final hasParentMessage = message['parent_message_id'] != null;
 
+    // Парсим даты доставки и прочтения
+    final deliveredAt = message['delivered_at'] != null
+        ? DateTime.parse(message['delivered_at']).toLocal()
+        : null;
+    final readAt = message['read_at'] != null
+        ? DateTime.parse(message['read_at']).toLocal()
+        : null;
+
     return MessageBubble(
       message: message['content'] ?? '',
       isMe: isMe,
@@ -1123,6 +1251,8 @@ class _ChatScreenState extends State<ChatScreen> with WidgetsBindingObserver {
             }
           : null,
       users: users,
+      deliveredAt: deliveredAt,
+      readAt: readAt,
     );
   }
 
@@ -1462,6 +1592,8 @@ class MessageBubble extends StatelessWidget {
   final bool isImage;
   final Map<String, dynamic>? parentMessage;
   final Map<String, Map<String, dynamic>> users;
+  final DateTime? deliveredAt;
+  final DateTime? readAt;
 
   const MessageBubble({
     super.key,
@@ -1475,6 +1607,8 @@ class MessageBubble extends StatelessWidget {
     this.isImage = false,
     this.parentMessage,
     required this.users,
+    this.deliveredAt,
+    this.readAt,
   });
 
   void _showMessageMenu(BuildContext context) {
@@ -1636,6 +1770,36 @@ class MessageBubble extends StatelessWidget {
     );
   }
 
+  Widget _buildMessageStatus() {
+    if (!isMe) return const SizedBox.shrink();
+
+    final hasRead = readAt != null;
+    final hasDelivered = deliveredAt != null || hasRead;
+
+    return Row(
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        // Время сообщения
+        Text(
+          time,
+          style: TextStyle(
+            fontSize: 10,
+            color: isMe ? Colors.white.withOpacity(0.9) : Colors.grey[800],
+            fontWeight: FontWeight.w500,
+          ),
+        ),
+        const SizedBox(width: 4),
+
+        // Статус сообщения
+        Icon(
+          hasRead ? Icons.done_all : Icons.done,
+          size: 12,
+          color: hasRead ? Colors.blue[200] : Colors.white.withOpacity(0.7),
+        ),
+      ],
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     return GestureDetector(
@@ -1702,8 +1866,7 @@ class MessageBubble extends StatelessWidget {
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
                         _buildParentMessagePreview(),
-                        if (isImage)
-                          _buildImagePreview(context), // Передаем context
+                        if (isImage) _buildImagePreview(context),
                         if (!isImage)
                           Text(
                             message,
@@ -1713,16 +1876,8 @@ class MessageBubble extends StatelessWidget {
                             ),
                           ),
                         const SizedBox(height: 4),
-                        Text(
-                          time,
-                          style: TextStyle(
-                            fontSize: 11,
-                            color: isMe
-                                ? Colors.white.withOpacity(0.9)
-                                : Colors.grey[800],
-                            fontWeight: FontWeight.w500,
-                          ),
-                        ),
+                        // Заменяем старый виджет времени на новый с статусами
+                        _buildMessageStatus(),
                       ],
                     ),
                   ),
