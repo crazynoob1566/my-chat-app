@@ -753,16 +753,26 @@ class _ChatScreenState extends State<ChatScreen> with WidgetsBindingObserver {
 
       // Если это ответ на сообщение, добавляем информацию о родительском сообщении
       if (_replyingToMessage != null) {
-        messageData['parent_message_id'] = _replyingToMessage!['id'];
-        messageData['parent_message_content'] = _replyingToMessage!['content'];
-        messageData['parent_sender_id'] = _replyingToMessage!['sender_id'];
+        // Убеждаемся, что ID преобразован в правильный тип
+        messageData['parent_message_id'] = _replyingToMessage!['id'] is int
+            ? _replyingToMessage!['id']
+            : int.tryParse(_replyingToMessage!['id'].toString()) ?? 0;
+        messageData['parent_message_content'] =
+            _replyingToMessage!['content']?.toString() ?? '';
+        messageData['parent_sender_id'] =
+            _replyingToMessage!['sender_id']?.toString() ?? '';
       }
 
-      await _supabase.from('messages').insert(messageData);
+      final response =
+          await _supabase.from('messages').insert(messageData).select();
 
-      _messageController.clear();
-      _cancelReply(); // Сбрасываем ответ после отправки
+      if (response != null && response.isNotEmpty) {
+        _messageController.clear();
+        _cancelReply(); // Сбрасываем ответ после отправки
+        print('Сообщение отправлено успешно');
+      }
     } catch (e) {
+      print('Ошибка отправки: $e');
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(content: Text('Ошибка отправки: $e')),
@@ -786,14 +796,25 @@ class _ChatScreenState extends State<ChatScreen> with WidgetsBindingObserver {
       };
 
       if (_replyingToMessage != null) {
-        messageData['parent_message_id'] = _replyingToMessage!['id'];
-        messageData['parent_message_content'] = _replyingToMessage!['content'];
-        messageData['parent_sender_id'] = _replyingToMessage!['sender_id'];
+        // Убеждаемся, что ID преобразован в правильный тип
+        messageData['parent_message_id'] = _replyingToMessage!['id'] is int
+            ? _replyingToMessage!['id']
+            : int.tryParse(_replyingToMessage!['id'].toString()) ?? 0;
+        messageData['parent_message_content'] =
+            _replyingToMessage!['content']?.toString() ?? '';
+        messageData['parent_sender_id'] =
+            _replyingToMessage!['sender_id']?.toString() ?? '';
       }
 
-      await _supabase.from('messages').insert(messageData);
-      _cancelReply();
+      final response =
+          await _supabase.from('messages').insert(messageData).select();
+
+      if (response != null && response.isNotEmpty) {
+        _cancelReply();
+        print('Изображение отправлено успешно');
+      }
     } catch (e) {
+      print('Ошибка отправки изображения: $e');
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(content: Text('Ошибка отправки изображения: $e')),
