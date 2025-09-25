@@ -1198,14 +1198,15 @@ class _ChatScreenState extends State<ChatScreen> with WidgetsBindingObserver {
     return Container(
       padding: const EdgeInsets.all(12),
       decoration: BoxDecoration(
-        color: Colors.blue.withOpacity(0.1),
+        color: Colors.blue.withOpacity(0.3), // Более насыщенный фон
         border: const Border(
           left: BorderSide(color: Colors.blue, width: 4),
         ),
       ),
       child: Row(
         children: [
-          Icon(Icons.reply, color: Colors.blue, size: 16),
+          Icon(Icons.reply,
+              color: Colors.blue[800], size: 18), // Более темная иконка
           const SizedBox(width: 8),
           Expanded(
             child: Column(
@@ -1213,27 +1214,40 @@ class _ChatScreenState extends State<ChatScreen> with WidgetsBindingObserver {
               children: [
                 Text(
                   'Ответ на сообщение ${isReplyingToMe ? 'вам' : replyUserInfo['name']}',
-                  style: const TextStyle(
-                    fontSize: 12,
+                  style: TextStyle(
+                    fontSize: 12, // Увеличили шрифт
                     fontWeight: FontWeight.bold,
-                    color: Colors.blue,
+                    color: Colors.blue[900], // Более темный синий
                   ),
                 ),
-                const SizedBox(height: 4),
-                Text(
-                  _replyingToMessage!['type'] == 'image'
-                      ? '📷 Фото'
-                      : (_replyingToMessage!['content'] ?? ''),
-                  style: const TextStyle(fontSize: 12),
-                  maxLines: 1,
-                  overflow: TextOverflow.ellipsis,
+                const SizedBox(height: 6),
+                Container(
+                  padding:
+                      const EdgeInsets.symmetric(horizontal: 8, vertical: 6),
+                  decoration: BoxDecoration(
+                    color:
+                        Colors.white.withOpacity(0.9), // Белый фон для текста
+                    borderRadius: BorderRadius.circular(6),
+                  ),
+                  child: Text(
+                    _replyingToMessage!['type'] == 'image'
+                        ? '📷 Фото'
+                        : (_replyingToMessage!['content'] ?? ''),
+                    style: const TextStyle(
+                      fontSize: 14,
+                      color: Colors.black87, // Темный текст на светлом фоне
+                      fontWeight: FontWeight.w500,
+                    ),
+                    maxLines: 2,
+                    overflow: TextOverflow.ellipsis,
+                  ),
                 ),
               ],
             ),
           ),
           IconButton(
-            icon: const Icon(Icons.close, size: 16),
-            onPressed: _cancelReply, // Исправлено здесь
+            icon: Icon(Icons.close, size: 18, color: Colors.blue[800]),
+            onPressed: _cancelReply,
           ),
         ],
       ),
@@ -1370,7 +1384,7 @@ class _ChatScreenState extends State<ChatScreen> with WidgetsBindingObserver {
             ),
           Container(
             decoration: BoxDecoration(
-              color: Colors.white.withOpacity(0.1),
+              color: Colors.white.withOpacity(0.8),
             ),
             padding: const EdgeInsets.all(8.0),
             child: Row(
@@ -1510,12 +1524,17 @@ class MessageBubble extends StatelessWidget {
 
     return Container(
       margin: const EdgeInsets.only(bottom: 8),
-      padding: const EdgeInsets.all(8),
+      padding: const EdgeInsets.all(10),
       decoration: BoxDecoration(
-        color: (isMe ? Colors.white : Colors.blue).withOpacity(0.2),
+        color: (isMe ? Colors.white : Colors.blue[50])!
+            .withOpacity(0.8), // Более насыщенный фон
         borderRadius: BorderRadius.circular(8),
         border: Border.all(
-            color: (isMe ? Colors.grey : Colors.blue).withOpacity(0.3)),
+          color: (isMe
+              ? Colors.grey[400]!
+              : Colors.blue[300]!), // Более яркая граница
+          width: 1.5,
+        ),
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
@@ -1523,24 +1542,29 @@ class MessageBubble extends StatelessWidget {
           Row(
             children: [
               Icon(Icons.reply,
-                  size: 12, color: isMe ? Colors.grey : Colors.blue),
-              const SizedBox(width: 4),
+                  size: 14, color: isMe ? Colors.grey[700] : Colors.blue[700]),
+              const SizedBox(width: 6),
               Text(
                 isParentMe ? 'Вы' : parentUserInfo['name'],
                 style: TextStyle(
-                  fontSize: 11,
+                  fontSize: 12,
                   fontWeight: FontWeight.bold,
-                  color: isMe ? Colors.grey : Colors.blue,
+                  color: isMe
+                      ? Colors.grey[800]
+                      : Colors.blue[800], // Более темный текст
                 ),
               ),
             ],
           ),
-          const SizedBox(height: 2),
+          const SizedBox(height: 4),
           Text(
             parentMessage!['parent_message_content'] ?? '',
             style: TextStyle(
-              fontSize: 11,
-              color: isMe ? Colors.grey : Colors.blue,
+              fontSize: 12,
+              color: isMe
+                  ? Colors.grey[800]
+                  : Colors.blue[900], // Более контрастный цвет
+              fontWeight: FontWeight.w500,
             ),
             maxLines: 2,
             overflow: TextOverflow.ellipsis,
@@ -1621,7 +1645,7 @@ class MessageBubble extends StatelessWidget {
                           Text(
                             message,
                             style: TextStyle(
-                              color: isMe ? Colors.white : Colors.black87,
+                              color: isMe ? Colors.white : Colors.black,
                             ),
                           ),
                         const SizedBox(height: 4),
