@@ -520,11 +520,13 @@ class _ChatScreenState extends State<ChatScreen> with WidgetsBindingObserver {
 
   void _initializeChannels() {
     try {
-      _messagesChannel = _supabase.channel('messages');
-      _typingChannel = _supabase.channel('typing');
+      _messagesChannel = _supabase.channel('messages_${widget.currentUserId}');
+      _typingChannel = _supabase.channel('typing_${widget.currentUserId}');
 
       _subscribeToMessages();
       _subscribeToTypingIndicator();
+
+      print('Каналы инициализированы');
     } catch (e) {
       print('Ошибка инициализации каналов: $e');
       setState(() {
@@ -690,17 +692,33 @@ class _ChatScreenState extends State<ChatScreen> with WidgetsBindingObserver {
   }
 
   void _subscribeToMessages() {
-    _messagesChannel
-        .onPostgresChanges(
-          event: PostgresChangeEvent.insert,
-          schema: 'public',
-          table: 'messages',
-          callback: (payload) async {
-            final newMessage = payload.newRecord;
-            if ((newMessage['sender_id'] == widget.currentUserId &&
-                    newMessage['receiver_id'] == widget.friendId) ||
-                (newMessage['sender_id'] == widget.friendId &&
-                    newMessage['receiver_id'] == widget.currentUserId)) {
+    try {
+      _messagesChannel
+          .onPostgresChanges(
+        event: PostgresChangeEvent.insert,
+        schema: 'public',
+        table: 'messages',
+        callback: (payload) async {
+          final newMessage = payload.newRecord;
+          print('Получено новое сообщение: $newMessage');
+
+          // Проверяем, относится ли сообщение к текущему чату
+          if ((newMessage['sender_id'] == widget.currentUserId &&
+                  newMessage['receiver_id'] == widget.friendId) ||
+              (newMessage['sender_id'] == widget.friendId &&
+                  newMessage['receiver_id'] == widget.currentUserId)) {
+            // Проверяем, нет ли уже такого сообщения
+            bool messageExists = _messages.any((msg) {
+              final msgId = msg['id'] is int
+                  ? msg['id']
+                  : int.tryParse(msg['id'].toString());
+              final newMsgId = newMessage['id'] is int
+                  ? newMessage['id']
+                  : int.tryParse(newMessage['id'].toString());
+              return msgId == newMsgId;
+            });
+
+            if (!messageExists) {
               setState(() {
                 _messages.add(newMessage);
               });
@@ -710,10 +728,58 @@ class _ChatScreenState extends State<ChatScreen> with WidgetsBindingObserver {
               WidgetsBinding.instance.addPostFrameCallback((_) {
                 _scrollToBottom();
               });
+
+              // Уведомление для входящих сообщений
+              if (newMessage['sender_id'] != widget.currentUserId) {
+                final messageContent = newMessage['type'] == 'image'
+                    ? '📷 Фото'
+                    : newMessage['content'];
+
+                // Показываем уведомление
+                _showNotification(
+                  'Новое сообщение от ${users[newMessage['sender_id']]?['name'] ?? 'Unknown'}',
+                  messageContent,
+                );
+              }
             }
-          },
-        )
-        .subscribe();
+          }
+        },
+      )
+          .subscribe((status, error) {
+        if (status == RealtimeSubscribeStatus.subscribed) {
+          print('Подписка на сообщения активирована');
+        } else if (error != null) {
+          print('Ошибка подписки: $error');
+        }
+      });
+    } catch (e) {
+      print('Ошибка подписки на сообщения: $e');
+    }
+  }
+
+  Future<void> _showNotification(String title, String body) async {
+    try {
+      const AndroidNotificationDetails androidDetails =
+          AndroidNotificationDetails(
+        'chat_channel',
+        'Уведомления чата',
+        channelDescription: 'Уведомления о новых сообщениях',
+        importance: Importance.max,
+        priority: Priority.high,
+      );
+
+      const NotificationDetails details =
+          NotificationDetails(android: androidDetails);
+
+      await notificationsPlugin.show(
+        DateTime.now().millisecondsSinceEpoch.remainder(100000),
+        title,
+        body,
+        details,
+      );
+    } catch (e) {
+      print('Ошибка показа уведомления: $e');
+    }
   }
 
   // Функция ответа на сообщение
