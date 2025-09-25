@@ -863,6 +863,7 @@ class _ChatScreenState extends State<ChatScreen> with WidgetsBindingObserver {
 // Метод отправки изображения с ответом
   Future<void> _sendImageMessage(String imageUrl) async {
     try {
+      print('Отправка изображения с URL: $imageUrl');
       final messageData = {
         'sender_id': widget.currentUserId,
         'receiver_id': widget.friendId,
@@ -885,10 +886,6 @@ class _ChatScreenState extends State<ChatScreen> with WidgetsBindingObserver {
       }
     } catch (e) {
       print('Ошибка отправки изображения: $e');
-      if (!mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('Ошибка отправки изображения: $e')),
-      );
     }
   }
 
@@ -1512,6 +1509,78 @@ class MessageBubble extends StatelessWidget {
     );
   }
 
+  Widget _buildImagePreview(BuildContext context) {
+    return GestureDetector(
+      onTap: () {
+        Navigator.of(context).push(
+          MaterialPageRoute(
+            builder: (context) => FullScreenImageScreen(imageUrl: message),
+          ),
+        );
+      },
+      child: Container(
+        constraints: const BoxConstraints(
+          maxWidth: 200,
+          maxHeight: 200,
+        ),
+        decoration: BoxDecoration(
+          borderRadius: BorderRadius.circular(8),
+          color: Colors.grey[100],
+        ),
+        child: Stack(
+          children: [
+            ClipRRect(
+              borderRadius: BorderRadius.circular(8),
+              child: CachedNetworkImage(
+                imageUrl: message,
+                width: 200,
+                height: 200,
+                fit: BoxFit.cover,
+                placeholder: (context, url) => Container(
+                  width: 200,
+                  height: 200,
+                  color: Colors.grey[300],
+                  child: const Center(
+                    child: CircularProgressIndicator(),
+                  ),
+                ),
+                errorWidget: (context, url, error) => Container(
+                  width: 200,
+                  height: 200,
+                  color: Colors.grey[300],
+                  child: const Column(
+                    mainAxisAlignment: MainAxisAlignment.center,
+                    children: [
+                      Icon(Icons.error, color: Colors.red),
+                      SizedBox(height: 8),
+                      Text('Ошибка загрузки', style: TextStyle(fontSize: 12)),
+                    ],
+                  ),
+                ),
+              ),
+            ),
+            Positioned(
+              top: 8,
+              right: 8,
+              child: Container(
+                padding: const EdgeInsets.all(4),
+                decoration: BoxDecoration(
+                  color: Colors.black.withOpacity(0.6),
+                  shape: BoxShape.circle,
+                ),
+                child: const Icon(
+                  Icons.zoom_in,
+                  color: Colors.white,
+                  size: 16,
+                ),
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
   Widget _buildParentMessagePreview() {
     if (parentMessage == null) return const SizedBox.shrink();
 
@@ -1526,13 +1595,10 @@ class MessageBubble extends StatelessWidget {
       margin: const EdgeInsets.only(bottom: 8),
       padding: const EdgeInsets.all(10),
       decoration: BoxDecoration(
-        color: (isMe ? Colors.white : Colors.blue[50])!
-            .withOpacity(0.8), // Более насыщенный фон
+        color: (isMe ? Colors.white : Colors.blue[50])!.withOpacity(0.8),
         borderRadius: BorderRadius.circular(8),
         border: Border.all(
-          color: (isMe
-              ? Colors.grey[400]!
-              : Colors.blue[300]!), // Более яркая граница
+          color: (isMe ? Colors.grey[400]! : Colors.blue[300]!),
           width: 1.5,
         ),
       ),
@@ -1549,9 +1615,7 @@ class MessageBubble extends StatelessWidget {
                 style: TextStyle(
                   fontSize: 12,
                   fontWeight: FontWeight.bold,
-                  color: isMe
-                      ? Colors.grey[800]
-                      : Colors.blue[800], // Более темный текст
+                  color: isMe ? Colors.grey[800] : Colors.blue[800],
                 ),
               ),
             ],
@@ -1561,9 +1625,7 @@ class MessageBubble extends StatelessWidget {
             parentMessage!['parent_message_content'] ?? '',
             style: TextStyle(
               fontSize: 12,
-              color: isMe
-                  ? Colors.grey[800]
-                  : Colors.blue[900], // Более контрастный цвет
+              color: isMe ? Colors.grey[800] : Colors.blue[900],
               fontWeight: FontWeight.w500,
             ),
             maxLines: 2,
@@ -1640,20 +1702,25 @@ class MessageBubble extends StatelessWidget {
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
                         _buildParentMessagePreview(),
-                        if (isImage) Text('📷 Фото'),
+                        if (isImage)
+                          _buildImagePreview(context), // Передаем context
                         if (!isImage)
                           Text(
                             message,
                             style: TextStyle(
                               color: isMe ? Colors.white : Colors.black,
+                              fontSize: 16,
                             ),
                           ),
                         const SizedBox(height: 4),
                         Text(
                           time,
                           style: TextStyle(
-                            fontSize: 10,
-                            color: isMe ? Colors.white70 : Colors.grey[600],
+                            fontSize: 11,
+                            color: isMe
+                                ? Colors.white.withOpacity(0.9)
+                                : Colors.grey[800],
+                            fontWeight: FontWeight.w500,
                           ),
                         ),
                       ],
