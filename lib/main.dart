@@ -1198,7 +1198,7 @@ class _ChatScreenState extends State<ChatScreen> with WidgetsBindingObserver {
     return Container(
       padding: const EdgeInsets.all(12),
       decoration: BoxDecoration(
-        color: Colors.blue.withOpacity(0.1),
+        color: Colors.blue.withOpacity(0.9),
         border: const Border(
           left: BorderSide(color: Colors.blue, width: 4),
         ),
