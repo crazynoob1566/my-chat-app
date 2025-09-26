@@ -633,16 +633,19 @@ class _ChatScreenState extends State<ChatScreen> with WidgetsBindingObserver {
   }
 
   @override
-  @override
   void didChangeAppLifecycleState(AppLifecycleState state) {
+    print('Состояние приложения: $state');
+
     if (state == AppLifecycleState.paused) {
       _messagesChannel.unsubscribe();
+      _typingChannel.unsubscribe();
       _stopTyping();
     } else if (state == AppLifecycleState.resumed) {
+      // Переинициализируем каналы при возобновлении
+      _initializeChannels();
       _loadMessages();
-      _subscribeToMessages();
 
-      // Отмечаем все непрочитанные сообщения как прочитанные при открытии чата
+      // Немедленно отмечаем все непрочитанные сообщения как прочитанные
       final unreadIds = _getUnreadMessageIds();
       if (unreadIds.isNotEmpty) {
         _markMessagesAsRead(unreadIds);
@@ -685,6 +688,8 @@ class _ChatScreenState extends State<ChatScreen> with WidgetsBindingObserver {
           .or('sender_id.eq.${widget.currentUserId},receiver_id.eq.${widget.currentUserId}')
           .order('created_at', ascending: true);
 
+      print('Загружено ${response.length} сообщений с сервера');
+
       setState(() {
         _messages = List<Map<String, dynamic>>.from(response);
       });
@@ -694,6 +699,16 @@ class _ChatScreenState extends State<ChatScreen> with WidgetsBindingObserver {
       WidgetsBinding.instance.addPostFrameCallback((_) {
         _scrollToBottom();
       });
+
+      // Немедленно отмечаем все непрочитанные сообщения как прочитанные
+      final unreadIds = _getUnreadMessageIds();
+      if (unreadIds.isNotEmpty) {
+        print(
+            'При загрузке отмечаем ${unreadIds.length} сообщений как прочитанные');
+        await _markMessagesAsRead(unreadIds);
+      }
+      // Добавьте для отладки
+      _debugMessageStatuses();
     } catch (e) {
       print('Ошибка загрузки сообщений: $e');
     }
@@ -703,25 +718,21 @@ class _ChatScreenState extends State<ChatScreen> with WidgetsBindingObserver {
     try {
       _messagesChannel
           .onPostgresChanges(
-        event: PostgresChangeEvent.all, // Слушаем все события
+        event: PostgresChangeEvent.all,
         schema: 'public',
         table: 'messages',
         callback: (payload) async {
-          final newMessage = payload.newRecord;
-          final oldMessage = payload.oldRecord;
+          print('Получено событие: ${payload.eventType}');
 
-          // Обработка разных типов событий
           if (payload.eventType == 'INSERT') {
-            print('Получено новое сообщение: $newMessage');
-            _handleNewMessage(newMessage);
+            final newMessage = payload.newRecord;
+            await _handleNewMessage(newMessage);
           } else if (payload.eventType == 'UPDATE') {
-            print('Обновлено сообщение: $newMessage');
-            _handleUpdatedMessage(newMessage, oldMessage);
-          } else if (payload.eventType == 'DELETE') {
-            print('Удалено сообщение: $oldMessage');
-            // Обработка удаления сообщений
+            final newMessage = payload.newRecord;
+            final oldMessage = payload.oldRecord;
+            await _handleUpdatedMessage(newMessage, oldMessage);
           }
-          // Для PostgresChangeEvent.all не нужно отдельное условие
+          // Игнорируем DELETE события
         },
       )
           .subscribe((status, error) {
@@ -736,7 +747,9 @@ class _ChatScreenState extends State<ChatScreen> with WidgetsBindingObserver {
     }
   }
 
-  void _handleNewMessage(Map<String, dynamic> newMessage) {
+  Future<void> _handleNewMessage(Map<String, dynamic> newMessage) async {
+    print('Обработка нового сообщения: $newMessage');
+
     // Проверяем, относится ли сообщение к текущему чату
     if ((newMessage['sender_id'] == widget.currentUserId &&
             newMessage['receiver_id'] == widget.friendId) ||
@@ -753,11 +766,12 @@ class _ChatScreenState extends State<ChatScreen> with WidgetsBindingObserver {
       });
 
       if (!messageExists) {
+        print('Добавляем новое сообщение в список');
         setState(() {
           _messages.add(newMessage);
         });
 
-        _saveMessagesLocally();
+        await _saveMessagesLocally();
 
         WidgetsBinding.instance.addPostFrameCallback((_) {
           _scrollToBottom();
@@ -773,25 +787,37 @@ class _ChatScreenState extends State<ChatScreen> with WidgetsBindingObserver {
             messageContent,
           );
 
-          // Отмечаем как прочитанное, если чат активен
-          if (WidgetsBinding.instance.lifecycleState ==
-              AppLifecycleState.resumed) {
-            _markMessagesAsRead([newMessage['id'] as int]);
+          // Немедленно отмечаем как прочитанное, если чат активен
+          if (mounted &&
+              WidgetsBinding.instance.lifecycleState ==
+                  AppLifecycleState.resumed) {
+            await _markMessagesAsRead([newMessage['id'] as int]);
           }
         }
+      } else {
+        print('Сообщение уже существует в списке');
       }
     }
+    _debugMessageStatuses();
   }
 
-  void _handleUpdatedMessage(
-      Map<String, dynamic> newMessage, Map<String, dynamic>? oldMessage) {
+  Future<void> _handleUpdatedMessage(
+      Map<String, dynamic> newMessage, Map<String, dynamic>? oldMessage) async {
+    print('Обработка обновления сообщения: ${newMessage['id']}');
+
     final index = _messages.indexWhere((msg) => msg['id'] == newMessage['id']);
     if (index != -1) {
+      print('Обновляем существующее сообщение');
       setState(() {
         _messages[index] = newMessage;
       });
-      _saveMessagesLocally();
+      await _saveMessagesLocally();
+    } else {
+      print('Сообщение не найдено в списке, возможно это новое сообщение');
+      // Если сообщение не найдено, обрабатываем его как новое
+      await _handleNewMessage(newMessage);
     }
+    _debugMessageStatuses();
   }
 
   Future<void> _showNotification(String title, String body) async {
@@ -900,7 +926,7 @@ class _ChatScreenState extends State<ChatScreen> with WidgetsBindingObserver {
 
 // Метод для периодической проверки статуса сообщений
   void _startMessageStatusChecker() {
-    Timer.periodic(const Duration(seconds: 5), (timer) {
+    Timer.periodic(const Duration(seconds: 3), (timer) async {
       if (!mounted) {
         timer.cancel();
         return;
@@ -909,16 +935,31 @@ class _ChatScreenState extends State<ChatScreen> with WidgetsBindingObserver {
       // Отмечаем сообщения как доставленные
       final undeliveredIds = _getUndeliveredMessageIds();
       if (undeliveredIds.isNotEmpty) {
-        _markMessagesAsDelivered(undeliveredIds);
+        print('Отмечаем ${undeliveredIds.length} сообщений как доставленные');
+        await _markMessagesAsDelivered(undeliveredIds);
       }
 
       // Отмечаем сообщения как прочитанные, если чат активен
       final unreadIds = _getUnreadMessageIds();
       if (unreadIds.isNotEmpty &&
           WidgetsBinding.instance.lifecycleState == AppLifecycleState.resumed) {
-        _markMessagesAsRead(unreadIds);
+        print('Отмечаем ${unreadIds.length} сообщений как прочитанные');
+        await _markMessagesAsRead(unreadIds);
       }
+      _debugMessageStatuses();
     });
+  }
+
+  // Добавьте этот метод после _startMessageStatusChecker()
+  void _debugMessageStatuses() {
+    final mySentMessages =
+        _messages.where((m) => m['sender_id'] == widget.currentUserId).toList();
+    final delivered =
+        mySentMessages.where((m) => m['delivered_at'] != null).length;
+    final read = mySentMessages.where((m) => m['read_at'] != null).length;
+
+    print(
+        'Статусы сообщений: Всего отправлено: ${mySentMessages.length}, Доставлено: $delivered, Прочитано: $read');
   }
 
 // Метод отправки сообщения с ответом
@@ -959,6 +1000,14 @@ class _ChatScreenState extends State<ChatScreen> with WidgetsBindingObserver {
       print('Ответ от Supabase: $response');
 
       if (response != null && response.isNotEmpty) {
+        final newMessage = response.first;
+        setState(() {
+          _messages.add(newMessage);
+        });
+        await _saveMessagesLocally();
+        WidgetsBinding.instance.addPostFrameCallback((_) {
+          _scrollToBottom();
+        });
         _messageController.clear();
         _cancelReply();
         print('Сообщение отправлено успешно');
@@ -1001,6 +1050,14 @@ class _ChatScreenState extends State<ChatScreen> with WidgetsBindingObserver {
           await _supabase.from('messages').insert(messageData).select();
 
       if (response != null && response.isNotEmpty) {
+        final newMessage = response.first;
+        setState(() {
+          _messages.add(newMessage);
+        });
+        await _saveMessagesLocally();
+        WidgetsBinding.instance.addPostFrameCallback((_) {
+          _scrollToBottom();
+        });
         _cancelReply();
         print('Изображение отправлено успешно');
       }
