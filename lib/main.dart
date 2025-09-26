@@ -487,11 +487,11 @@ class ChatScreen extends StatefulWidget {
 class _ChatScreenState extends State<ChatScreen> with WidgetsBindingObserver {
   final TextEditingController _messageController = TextEditingController();
   late final SupabaseClient _supabase;
-  late final RealtimeChannel _messagesChannel;
-  late final RealtimeChannel _typingChannel;
   final Future<SharedPreferences> _prefs = SharedPreferences.getInstance();
   final ImagePicker _imagePicker = ImagePicker();
   final ScrollController _scrollController = ScrollController();
+  late final RealtimeChannel _chatChannel;
+  bool _isSubscribed = false;
 
   List<Map<String, dynamic>> _messages = [];
   bool _isSending = false;
@@ -514,40 +514,99 @@ class _ChatScreenState extends State<ChatScreen> with WidgetsBindingObserver {
     super.initState();
     WidgetsBinding.instance.addObserver(this);
     _supabase = Supabase.instance.client;
-    _initializeChannels();
+    _initializeRealtime(); // ИЗМЕНИЛИ эту строку
     _loadMessages();
     _startMessageStatusChecker();
-    _startConnectionChecker();
   }
 
-  void _initializeChannels() {
+  void _initializeRealtime() {
     try {
-      final List<String> sortedIds = [widget.currentUserId, widget.friendId]
-        ..sort();
-      final chatChannelName = 'chat_${sortedIds[0]}_${sortedIds[1]}';
+      // Создаем уникальный идентификатор канала на основе ID пользователей
+      final channelId = _getChatChannelId();
+      _chatChannel = _supabase.channel(channelId);
 
-      _messagesChannel = _supabase.channel(chatChannelName);
-      _typingChannel = _supabase.channel('typing_$chatChannelName');
+      _setupMessageSubscription();
+      _setupTypingSubscription();
 
-      _subscribeToMessages();
-      _subscribeToTypingIndicator();
-
-      print('Каналы инициализированы для чата: $chatChannelName');
+      _chatChannel.subscribe((status, error) {
+        if (status == RealtimeSubscribeStatus.subscribed) {
+          print('✅ Успешно подписались на канал: $channelId');
+          setState(() {
+            _isSubscribed = true;
+          });
+        } else if (error != null) {
+          print('❌ Ошибка подписки: $error');
+          setState(() {
+            _isSubscribed = false;
+          });
+          // Попытка переподключения через 3 секунды
+          Future.delayed(const Duration(seconds: 3), () {
+            if (mounted) _reconnectChannels();
+          });
+        }
+      });
     } catch (e) {
-      print('Ошибка инициализации каналов: $e');
+      print('❌ Ошибка инициализации Realtime: $e');
       setState(() {
         _isRealtimeEnabled = false;
         _isTypingFeatureAvailable = false;
       });
-
-      // Автоматическая попытка переподключения через 5 секунд
-      Future.delayed(const Duration(seconds: 5), () {
-        if (mounted) _reconnectChannels();
-      });
     }
   }
 
-  // Добавьте в класс _ChatScreenState
+  String _getChatChannelId() {
+    final ids = [widget.currentUserId, widget.friendId]..sort();
+    return 'chat_${ids.join('_')}';
+  }
+
+  void _setupMessageSubscription() {
+    _chatChannel.onPostgresChanges(
+      event: PostgresChangeEvent.all,
+      schema: 'public',
+      table: 'messages',
+      callback: (payload) {
+        print('📨 Получено обновление сообщения: ${payload.eventType}');
+
+        if (payload.eventType == 'INSERT') {
+          _handleNewMessage(payload.newRecord);
+        } else if (payload.eventType == 'UPDATE') {
+          _handleUpdatedMessage(payload.newRecord, payload.oldRecord);
+        }
+      },
+    );
+  }
+
+  void _setupTypingSubscription() {
+    if (!_isTypingFeatureAvailable) return;
+
+    _chatChannel.onPostgresChanges(
+      event: PostgresChangeEvent.all,
+      schema: 'public',
+      table: 'typing_indicators',
+      callback: (payload) {
+        final record = payload.newRecord ?? payload.oldRecord;
+        if (record != null &&
+            record['user_id'] == widget.friendId &&
+            record['friend_id'] == widget.currentUserId) {
+          _typingTimer?.cancel();
+          setState(() {
+            _isFriendTyping = record['is_typing'] == true;
+          });
+
+          if (_isFriendTyping) {
+            _typingTimer = Timer(const Duration(seconds: 5), () {
+              if (mounted) {
+                setState(() {
+                  _isFriendTyping = false;
+                });
+              }
+            });
+          }
+        }
+      },
+    );
+  }
+
   // Добавьте в класс _ChatScreenState
   void _startConnectionChecker() {
     Timer.periodic(const Duration(seconds: 10), (timer) {
@@ -560,47 +619,6 @@ class _ChatScreenState extends State<ChatScreen> with WidgetsBindingObserver {
       // Можно добавить более сложную логику при необходимости
       print('Проверка соединения...');
     });
-  }
-
-  void _subscribeToTypingIndicator() {
-    if (!_isRealtimeEnabled) return;
-
-    try {
-      _typingChannel
-          .onPostgresChanges(
-            event: PostgresChangeEvent.all,
-            schema: 'public',
-            table: 'typing_indicators',
-            callback: (payload) {
-              final record = payload.newRecord ?? payload.oldRecord;
-              if (record != null &&
-                  record['user_id'] == widget.friendId &&
-                  record['friend_id'] == widget.currentUserId) {
-                _typingTimer?.cancel();
-
-                setState(() {
-                  _isFriendTyping = record['is_typing'] == true;
-                });
-
-                if (_isFriendTyping) {
-                  _typingTimer = Timer(const Duration(seconds: 5), () {
-                    if (mounted) {
-                      setState(() {
-                        _isFriendTyping = false;
-                      });
-                    }
-                  });
-                }
-              }
-            },
-          )
-          .subscribe();
-    } catch (e) {
-      print('Ошибка подписки на индикатор набора: $e');
-      setState(() {
-        _isTypingFeatureAvailable = false;
-      });
-    }
   }
 
   Future<void> _sendTypingEvent(bool isTyping) async {
@@ -649,8 +667,7 @@ class _ChatScreenState extends State<ChatScreen> with WidgetsBindingObserver {
     WidgetsBinding.instance.removeObserver(this);
     _messageController.dispose();
     _scrollController.dispose();
-    _messagesChannel.unsubscribe();
-    _typingChannel.unsubscribe();
+    _chatChannel.unsubscribe(); // ИЗМЕНИЛИ эту строку
     _typingTimer?.cancel();
     _typingDebounceTimer?.cancel();
     _messageFocusNode.dispose();
@@ -658,22 +675,19 @@ class _ChatScreenState extends State<ChatScreen> with WidgetsBindingObserver {
   }
 
   @override
-  @override
   void didChangeAppLifecycleState(AppLifecycleState state) {
     print('Состояние приложения: $state');
 
     if (state == AppLifecycleState.paused) {
       print('Приложение свернуто, отписываемся от каналов');
-      _messagesChannel.unsubscribe();
-      _typingChannel.unsubscribe();
+      _chatChannel.unsubscribe(); // ИЗМЕНИЛИ
       _stopTyping();
     } else if (state == AppLifecycleState.resumed) {
       print('Приложение развернуто, переподписываемся на каналы');
-      // Переинициализируем каналы с задержкой для стабильности
       Future.delayed(const Duration(milliseconds: 1000), () {
         if (mounted) {
-          _reconnectChannels();
-          _manualSync(); // Синхронизируем сообщения при возвращении в чат
+          _initializeRealtime(); // ИЗМЕНИЛИ
+          _loadMessages();
         }
       });
     }
@@ -737,44 +751,6 @@ class _ChatScreenState extends State<ChatScreen> with WidgetsBindingObserver {
       _debugMessageStatuses();
     } catch (e) {
       print('Ошибка загрузки сообщений: $e');
-    }
-  }
-
-  void _subscribeToMessages() {
-    try {
-      _messagesChannel
-          .onPostgresChanges(
-        event: PostgresChangeEvent.all,
-        schema: 'public',
-        table: 'messages',
-        callback: (payload) async {
-          print('Получено событие: ${payload.eventType}');
-          print('Данные: ${payload.newRecord}');
-
-          if (payload.eventType == 'INSERT') {
-            final newMessage = payload.newRecord;
-            await _handleNewMessage(newMessage);
-          } else if (payload.eventType == 'UPDATE') {
-            final newMessage = payload.newRecord;
-            final oldMessage = payload.oldRecord;
-            await _handleUpdatedMessage(newMessage, oldMessage);
-          }
-        },
-      )
-          .subscribe((status, error) {
-        if (status == RealtimeSubscribeStatus.subscribed) {
-          print('✅ Подписка на сообщения активирована');
-        } else if (status == RealtimeSubscribeStatus.timedOut) {
-          print('❌ Таймаут подписки на сообщения');
-        } else if (error != null) {
-          print('❌ Ошибка подписки: $error');
-        }
-      });
-    } catch (e) {
-      print('❌ Ошибка подписки на сообщения: $e');
-      setState(() {
-        _isRealtimeEnabled = false;
-      });
     }
   }
 
@@ -999,18 +975,17 @@ class _ChatScreenState extends State<ChatScreen> with WidgetsBindingObserver {
   void _reconnectChannels() {
     if (!_isRealtimeEnabled) return;
 
-    print('🔄 Попытка переподключения каналов');
+    print('🔄 Переподключение каналов...');
     try {
-      _messagesChannel.unsubscribe();
-      _typingChannel.unsubscribe();
+      _chatChannel.unsubscribe();
 
-      Future.delayed(const Duration(seconds: 1), () {
+      Future.delayed(const Duration(seconds: 2), () {
         if (mounted) {
-          _initializeChannels();
+          _initializeRealtime();
         }
       });
     } catch (e) {
-      print('❌ Ошибка переподключения каналов: $e');
+      print('❌ Ошибка переподключения: $e');
     }
   }
 
@@ -1530,6 +1505,13 @@ class _ChatScreenState extends State<ChatScreen> with WidgetsBindingObserver {
             const Spacer(),
             Row(
               children: [
+                // ДОБАВИТЬ этот индикатор статуса соединения:
+                Icon(
+                  _isSubscribed ? Icons.wifi : Icons.wifi_off,
+                  color: _isSubscribed ? Colors.green : Colors.red,
+                  size: 16,
+                ),
+                const SizedBox(width: 4),
                 Icon(Icons.circle, color: Colors.green, size: 12),
                 const SizedBox(width: 4),
                 Text('online',
