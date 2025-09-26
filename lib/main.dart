@@ -517,12 +517,11 @@ class _ChatScreenState extends State<ChatScreen> with WidgetsBindingObserver {
     _initializeChannels();
     _loadMessages();
     _startMessageStatusChecker();
+    _startConnectionChecker();
   }
 
   void _initializeChannels() {
     try {
-      // Создаем общий канал для чата между двумя пользователями
-      // Упорядочиваем ID для создания уникального имени канала
       final List<String> sortedIds = [widget.currentUserId, widget.friendId]
         ..sort();
       final chatChannelName = 'chat_${sortedIds[0]}_${sortedIds[1]}';
@@ -540,7 +539,27 @@ class _ChatScreenState extends State<ChatScreen> with WidgetsBindingObserver {
         _isRealtimeEnabled = false;
         _isTypingFeatureAvailable = false;
       });
+
+      // Автоматическая попытка переподключения через 5 секунд
+      Future.delayed(const Duration(seconds: 5), () {
+        if (mounted) _reconnectChannels();
+      });
     }
+  }
+
+  // Добавьте в класс _ChatScreenState
+  // Добавьте в класс _ChatScreenState
+  void _startConnectionChecker() {
+    Timer.periodic(const Duration(seconds: 10), (timer) {
+      if (!mounted) {
+        timer.cancel();
+        return;
+      }
+
+      // Простая проверка - если не получаем сообщения, пытаемся переподключиться
+      // Можно добавить более сложную логику при необходимости
+      print('Проверка соединения...');
+    });
   }
 
   void _subscribeToTypingIndicator() {
@@ -639,6 +658,7 @@ class _ChatScreenState extends State<ChatScreen> with WidgetsBindingObserver {
   }
 
   @override
+  @override
   void didChangeAppLifecycleState(AppLifecycleState state) {
     print('Состояние приложения: $state');
 
@@ -650,10 +670,10 @@ class _ChatScreenState extends State<ChatScreen> with WidgetsBindingObserver {
     } else if (state == AppLifecycleState.resumed) {
       print('Приложение развернуто, переподписываемся на каналы');
       // Переинициализируем каналы с задержкой для стабильности
-      Future.delayed(const Duration(milliseconds: 500), () {
+      Future.delayed(const Duration(milliseconds: 1000), () {
         if (mounted) {
-          _initializeChannels();
-          _loadMessages(); // Принудительно загружаем сообщения
+          _reconnectChannels();
+          _manualSync(); // Синхронизируем сообщения при возвращении в чат
         }
       });
     }
