@@ -521,13 +521,19 @@ class _ChatScreenState extends State<ChatScreen> with WidgetsBindingObserver {
 
   void _initializeChannels() {
     try {
-      _messagesChannel = _supabase.channel('messages_${widget.currentUserId}');
-      _typingChannel = _supabase.channel('typing_${widget.currentUserId}');
+      // Создаем общий канал для чата между двумя пользователями
+      // Упорядочиваем ID для создания уникального имени канала
+      final List<String> sortedIds = [widget.currentUserId, widget.friendId]
+        ..sort();
+      final chatChannelName = 'chat_${sortedIds[0]}_${sortedIds[1]}';
+
+      _messagesChannel = _supabase.channel(chatChannelName);
+      _typingChannel = _supabase.channel('typing_$chatChannelName');
 
       _subscribeToMessages();
       _subscribeToTypingIndicator();
 
-      print('Каналы инициализированы');
+      print('Каналы инициализированы для чата: $chatChannelName');
     } catch (e) {
       print('Ошибка инициализации каналов: $e');
       setState(() {
@@ -637,19 +643,19 @@ class _ChatScreenState extends State<ChatScreen> with WidgetsBindingObserver {
     print('Состояние приложения: $state');
 
     if (state == AppLifecycleState.paused) {
+      print('Приложение свернуто, отписываемся от каналов');
       _messagesChannel.unsubscribe();
       _typingChannel.unsubscribe();
       _stopTyping();
     } else if (state == AppLifecycleState.resumed) {
-      // Переинициализируем каналы при возобновлении
-      _initializeChannels();
-      _loadMessages();
-
-      // Немедленно отмечаем все непрочитанные сообщения как прочитанные
-      final unreadIds = _getUnreadMessageIds();
-      if (unreadIds.isNotEmpty) {
-        _markMessagesAsRead(unreadIds);
-      }
+      print('Приложение развернуто, переподписываемся на каналы');
+      // Переинициализируем каналы с задержкой для стабильности
+      Future.delayed(const Duration(milliseconds: 500), () {
+        if (mounted) {
+          _initializeChannels();
+          _loadMessages(); // Принудительно загружаем сообщения
+        }
+      });
     }
   }
 
@@ -723,6 +729,7 @@ class _ChatScreenState extends State<ChatScreen> with WidgetsBindingObserver {
         table: 'messages',
         callback: (payload) async {
           print('Получено событие: ${payload.eventType}');
+          print('Данные: ${payload.newRecord}');
 
           if (payload.eventType == 'INSERT') {
             final newMessage = payload.newRecord;
@@ -732,18 +739,22 @@ class _ChatScreenState extends State<ChatScreen> with WidgetsBindingObserver {
             final oldMessage = payload.oldRecord;
             await _handleUpdatedMessage(newMessage, oldMessage);
           }
-          // Игнорируем DELETE события
         },
       )
           .subscribe((status, error) {
         if (status == RealtimeSubscribeStatus.subscribed) {
-          print('Подписка на сообщения активирована');
+          print('✅ Подписка на сообщения активирована');
+        } else if (status == RealtimeSubscribeStatus.timedOut) {
+          print('❌ Таймаут подписки на сообщения');
         } else if (error != null) {
-          print('Ошибка подписки: $error');
+          print('❌ Ошибка подписки: $error');
         }
       });
     } catch (e) {
-      print('Ошибка подписки на сообщения: $e');
+      print('❌ Ошибка подписки на сообщения: $e');
+      setState(() {
+        _isRealtimeEnabled = false;
+      });
     }
   }
 
@@ -948,6 +959,39 @@ class _ChatScreenState extends State<ChatScreen> with WidgetsBindingObserver {
       }
       _debugMessageStatuses();
     });
+  }
+
+  // ДОБАВЬТЕ ЭТОТ МЕТОД ЗДЕСЬ:
+  Future<void> _manualSync() async {
+    print('🔄 Ручная синхронизация сообщений');
+    await _loadMessages();
+
+    // Принудительно отмечаем все непрочитанные сообщения как прочитанные
+    final unreadIds = _getUnreadMessageIds();
+    if (unreadIds.isNotEmpty) {
+      print(
+          'Отмечаем ${unreadIds.length} сообщений как прочитанные при ручной синхронизации');
+      await _markMessagesAsRead(unreadIds);
+    }
+  }
+
+  // ДОБАВЬТЕ ЭТОТ МЕТОД ЗДЕСЬ:
+  void _reconnectChannels() {
+    if (!_isRealtimeEnabled) return;
+
+    print('🔄 Попытка переподключения каналов');
+    try {
+      _messagesChannel.unsubscribe();
+      _typingChannel.unsubscribe();
+
+      Future.delayed(const Duration(seconds: 1), () {
+        if (mounted) {
+          _initializeChannels();
+        }
+      });
+    } catch (e) {
+      print('❌ Ошибка переподключения каналов: $e');
+    }
   }
 
   // Добавьте этот метод после _startMessageStatusChecker()
@@ -1485,6 +1529,16 @@ class _ChatScreenState extends State<ChatScreen> with WidgetsBindingObserver {
         ),
         iconTheme: const IconThemeData(color: Colors.white),
         actions: [
+          IconButton(
+            icon: const Icon(Icons.wifi_find, color: Colors.white),
+            onPressed: _reconnectChannels,
+            tooltip: 'Переподключить каналы',
+          ),
+          IconButton(
+            icon: const Icon(Icons.sync, color: Colors.white),
+            onPressed: _manualSync,
+            tooltip: 'Синхронизировать сообщения',
+          ),
           IconButton(
             icon: const Icon(Icons.delete_sweep, color: Colors.white),
             onPressed: _showClearChatDialog,
