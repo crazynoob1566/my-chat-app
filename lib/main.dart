@@ -495,6 +495,7 @@ class _ChatScreenState extends State<ChatScreen> with WidgetsBindingObserver {
   List<Map<String, dynamic>> _messages = [];
   bool _isSending = false;
   bool _isUploadingImage = false;
+  bool _isUpdatingStatuses = false;
 
   // Переменные для индикатора набора сообщения
   bool _isFriendTyping = false;
@@ -540,40 +541,36 @@ class _ChatScreenState extends State<ChatScreen> with WidgetsBindingObserver {
     try {
       print('=== ПРОВЕРКА НОВЫХ СООБЩЕНИЙ ===');
 
-      // Простой запрос без сложных параметров
       final response = await _supabase
           .from('messages')
           .select()
           .order('created_at', ascending: false)
-          .limit(10);
+          .limit(20);
 
       print('Получено сообщений: ${response.length}');
 
-      // Выводим информацию о каждом сообщении
-      for (var msg in response) {
-        print(
-            'Сообщение: ID=${msg['id']}, от=${msg['sender_id']}, к=${msg['receiver_id']}');
-      }
-
       // Ищем новые сообщения
-      int newCount = 0;
-      for (var serverMsg in response) {
-        if (!_messages.any((localMsg) => localMsg['id'] == serverMsg['id'])) {
-          newCount++;
-        }
-      }
+      final newMessages = response
+          .where((serverMsg) =>
+              !_messages.any((localMsg) => localMsg['id'] == serverMsg['id']))
+          .toList();
 
-      if (newCount > 0) {
-        print('Найдено $newCount новых сообщений');
+      if (newMessages.isNotEmpty) {
+        print('Найдено ${newMessages.length} новых сообщений');
         setState(() {
-          _messages = List<Map<String, dynamic>>.from(response);
+          _messages.addAll(newMessages);
           _messages.sort((a, b) => a['created_at'].compareTo(b['created_at']));
         });
+
         await _saveMessagesLocally();
         _scrollToBottom();
-      } else {
-        print('Новых сообщений нет');
+
+        // Автоматически отмечаем новые сообщения от друга как прочитанные
+        await _markNewMessagesAsRead(newMessages);
       }
+
+      // Всегда обновляем статусы существующих сообщений
+      await _updateMessageStatuses();
     } catch (e) {
       print('ОШИБКА: $e');
     }
@@ -636,9 +633,10 @@ class _ChatScreenState extends State<ChatScreen> with WidgetsBindingObserver {
   void didChangeAppLifecycleState(AppLifecycleState state) {
     if (state == AppLifecycleState.paused) {
       _stopTyping();
+      print('📱 Приложение свернуто');
     } else if (state == AppLifecycleState.resumed) {
-      print('🔄 Приложение вернулось на передний план');
-      // Принудительно проверяем сообщения
+      print('📱 Приложение активно - принудительная синхронизация');
+      // При возвращении в приложение сразу обновляем все
       _checkForNewMessages();
       _updateMessageStatuses();
     }
@@ -799,6 +797,42 @@ class _ChatScreenState extends State<ChatScreen> with WidgetsBindingObserver {
     }
   }
 
+  Future<void> _markNewMessagesAsRead(
+      List<Map<String, dynamic>> newMessages) async {
+    try {
+      // Находим сообщения от друга, которые еще не прочитаны
+      final unreadFromFriend = newMessages
+          .where((msg) =>
+              msg['sender_id'] == widget.friendId &&
+              msg['receiver_id'] == widget.currentUserId &&
+              msg['read_at'] == null)
+          .toList();
+
+      if (unreadFromFriend.isNotEmpty) {
+        final unreadIds =
+            unreadFromFriend.map((msg) => msg['id'] as int).toList();
+        print(
+            '📖 Автоматически отмечаем ${unreadIds.length} сообщений как прочитанные');
+
+        await _markMessagesAsRead(unreadIds);
+
+        // Сразу обновляем локально
+        for (int id in unreadIds) {
+          final index = _messages.indexWhere((msg) => msg['id'] == id);
+          if (index != -1) {
+            setState(() {
+              _messages[index]['read_at'] = DateTime.now().toIso8601String();
+            });
+          }
+        }
+
+        await _saveMessagesLocally();
+      }
+    } catch (e) {
+      print('❌ Ошибка автоматической отметки прочтения: $e');
+    }
+  }
+
   // Метод проверки непрочитанных сообщений
   List<int> _getUnreadMessageIds() {
     return _messages
@@ -825,48 +859,86 @@ class _ChatScreenState extends State<ChatScreen> with WidgetsBindingObserver {
 
   // Упрощенная проверка статусов через polling
   Future<void> _updateMessageStatuses() async {
+    if (_isUpdatingStatuses) return;
+
+    setState(() {
+      _isUpdatingStatuses = true;
+    });
+
     try {
+      // Получаем ID наших отправленных сообщений, которые еще не доставлены/не прочитаны
+      final myUndeliveredMessages = _messages
+          .where((msg) =>
+              msg['sender_id'] == widget.currentUserId &&
+              msg['delivered_at'] == null)
+          .toList();
+
+      if (myUndeliveredMessages.isEmpty) {
+        return; // Нет сообщений для обновления статусов
+      }
+
+      // Получаем актуальные статусы с сервера
+      final messageIds =
+          myUndeliveredMessages.map((msg) => msg['id'] as int).toList();
+
       final response = await _supabase
           .from('messages')
-          .select()
-          .or('sender_id.eq.${widget.currentUserId},receiver_id.eq.${widget.currentUserId}')
-          .order('created_at', ascending: true);
+          .select('id, delivered_at, read_at')
+          .inFilter('id', messageIds);
 
-      // Сравниваем и обновляем статусы
-      for (var serverMessage in response) {
+      // Обновляем локальные статусы
+      bool hasUpdates = false;
+
+      for (var serverMsg in response) {
         final localIndex =
-            _messages.indexWhere((msg) => msg['id'] == serverMessage['id']);
+            _messages.indexWhere((msg) => msg['id'] == serverMsg['id']);
         if (localIndex != -1) {
-          // Проверяем, изменились ли статусы доставки/прочтения
-          final localDelivered = _messages[localIndex]['delivered_at'];
-          final serverDelivered = serverMessage['delivered_at'];
-          final localRead = _messages[localIndex]['read_at'];
-          final serverRead = serverMessage['read_at'];
+          final localMsg = _messages[localIndex];
 
-          if (localDelivered != serverDelivered || localRead != serverRead) {
+          // Проверяем изменения в статусах
+          if (localMsg['delivered_at'] != serverMsg['delivered_at'] ||
+              localMsg['read_at'] != serverMsg['read_at']) {
             setState(() {
-              _messages[localIndex] = serverMessage;
+              _messages[localIndex] = {
+                ...localMsg,
+                'delivered_at': serverMsg['delivered_at'],
+                'read_at': serverMsg['read_at'],
+              };
             });
+            hasUpdates = true;
           }
         }
       }
 
-      await _saveMessagesLocally();
+      if (hasUpdates) {
+        await _saveMessagesLocally();
+        print('✅ Статусы сообщений обновлены');
+      }
     } catch (e) {
-      print('Ошибка обновления статусов: $e');
+      print('❌ Ошибка обновления статусов: $e');
+    } finally {
+      if (mounted) {
+        setState(() {
+          _isUpdatingStatuses = false;
+        });
+      }
     }
   }
 
   // Метод для периодической проверки статуса сообщений
   void _startMessageStatusChecker() {
-    Timer.periodic(const Duration(seconds: 3), (timer) async {
+    Timer.periodic(const Duration(seconds: 5), (timer) async {
       if (!mounted) {
         timer.cancel();
         return;
       }
 
-      await _updateMessageStatuses();
-      _debugMessageStatuses();
+      try {
+        await _updateMessageStatuses();
+        _debugMessageStatuses();
+      } catch (e) {
+        print('❌ Ошибка в таймере статусов: $e');
+      }
     });
   }
 
@@ -1550,12 +1622,17 @@ class _ChatScreenState extends State<ChatScreen> with WidgetsBindingObserver {
               ],
             ),
           ),
-          _buildReplyPreview(),
+          if (_isUpdatingStatuses)
+            const LinearProgressIndicator(
+              backgroundColor: Colors.transparent,
+              valueColor: AlwaysStoppedAnimation<Color>(Colors.green),
+            ),
           if (_isUploadingImage)
             const LinearProgressIndicator(
               backgroundColor: Colors.transparent,
               valueColor: AlwaysStoppedAnimation<Color>(Colors.white),
             ),
+          _buildReplyPreview(),
           Container(
             decoration: BoxDecoration(color: Colors.white.withOpacity(0.8)),
             padding: const EdgeInsets.all(8.0),
