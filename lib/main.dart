@@ -508,7 +508,7 @@ class _ChatScreenState extends State<ChatScreen> with WidgetsBindingObserver {
 
   // Polling таймеры
   Timer? _pollingTimer;
-  DateTime _lastUpdateTime = DateTime.now();
+  int _lastUpdateTime = DateTime.now().millisecondsSinceEpoch;
 
   @override
   void initState() {
@@ -516,13 +516,13 @@ class _ChatScreenState extends State<ChatScreen> with WidgetsBindingObserver {
     WidgetsBinding.instance.addObserver(this);
     _supabase = Supabase.instance.client;
     _loadMessages();
-    _startPolling(); // Запускаем периодический опрос
+    _startPolling();
     _startMessageStatusChecker();
   }
 
-  // Простой и надежный polling вместо Realtime
+  // Улучшенный polling
   void _startPolling() {
-    _pollingTimer = Timer.periodic(const Duration(seconds: 2), (timer) async {
+    _pollingTimer = Timer.periodic(const Duration(seconds: 3), (timer) async {
       if (!mounted) {
         timer.cancel();
         return;
@@ -531,35 +531,63 @@ class _ChatScreenState extends State<ChatScreen> with WidgetsBindingObserver {
     });
   }
 
+  // Исправленная проверка новых сообщений
   Future<void> _checkForNewMessages() async {
     try {
       final response = await _supabase
           .from('messages')
           .select()
-          .or('sender_id.eq.${widget.currentUserId},receiver_id.eq.${widget.currentUserId}')
-          .gt('created_at', _lastUpdateTime.toIso8601String())
+          .or(
+              'sender_id.eq.${widget.currentUserId},receiver_id.eq.${widget.currentUserId}')
+          .gt(
+              'created_at',
+              DateTime.fromMillisecondsSinceEpoch(_lastUpdateTime)
+                  .toIso8601String())
           .order('created_at', ascending: true);
 
       if (response.isNotEmpty) {
         print('Найдено ${response.length} новых сообщений');
 
-        // Добавляем новые сообщения в список
+        List<Map<String, dynamic>> newMessages = [];
         for (var newMessage in response) {
           if (!_messages.any((msg) => msg['id'] == newMessage['id'])) {
-            setState(() {
-              _messages.add(newMessage);
-            });
+            newMessages.add(newMessage);
           }
         }
 
-        // Обновляем время последнего обновления
-        _lastUpdateTime = DateTime.now();
-        await _saveMessagesLocally();
+        if (newMessages.isNotEmpty) {
+          setState(() {
+            _messages.addAll(newMessages);
+            // Обновляем время до самого нового сообщения
+            final latestMessage = newMessages.reduce((a, b) =>
+                DateTime.parse(a['created_at'])
+                        .isAfter(DateTime.parse(b['created_at']))
+                    ? a
+                    : b);
+            _lastUpdateTime = DateTime.parse(latestMessage['created_at'])
+                .millisecondsSinceEpoch;
+          });
 
-        // Прокручиваем к низу если есть новые сообщения
-        WidgetsBinding.instance.addPostFrameCallback((_) {
-          _scrollToBottom();
-        });
+          await _saveMessagesLocally();
+
+          // Прокручиваем к низу
+          WidgetsBinding.instance.addPostFrameCallback((_) {
+            _scrollToBottom();
+          });
+
+          // Отмечаем новые сообщения как прочитанные
+          final unreadIds = newMessages
+              .where((msg) =>
+                  msg['sender_id'] == widget.friendId &&
+                  msg['receiver_id'] == widget.currentUserId &&
+                  msg['read_at'] == null)
+              .map((msg) => msg['id'] as int)
+              .toList();
+
+          if (unreadIds.isNotEmpty) {
+            await _markMessagesAsRead(unreadIds);
+          }
+        }
       }
     } catch (e) {
       print('Ошибка при проверке новых сообщений: $e');
@@ -655,6 +683,7 @@ class _ChatScreenState extends State<ChatScreen> with WidgetsBindingObserver {
     }
   }
 
+  // Исправленная загрузка сообщений
   Future<void> _loadMessages() async {
     try {
       await _loadCachedMessages();
@@ -667,10 +696,24 @@ class _ChatScreenState extends State<ChatScreen> with WidgetsBindingObserver {
 
       print('Загружено ${response.length} сообщений с сервера');
 
-      setState(() {
-        _messages = List<Map<String, dynamic>>.from(response);
-        _lastUpdateTime = DateTime.now(); // Обновляем время последней загрузки
-      });
+      if (response.isNotEmpty) {
+        setState(() {
+          _messages = List<Map<String, dynamic>>.from(response);
+          // Устанавливаем время последнего сообщения
+          final latestMessage = response.reduce((a, b) =>
+              DateTime.parse(a['created_at'])
+                      .isAfter(DateTime.parse(b['created_at']))
+                  ? a
+                  : b);
+          _lastUpdateTime = DateTime.parse(latestMessage['created_at'])
+              .millisecondsSinceEpoch;
+        });
+      } else {
+        setState(() {
+          _messages = List<Map<String, dynamic>>.from(response);
+          _lastUpdateTime = DateTime.now().millisecondsSinceEpoch;
+        });
+      }
 
       await _saveMessagesLocally();
 
@@ -678,7 +721,7 @@ class _ChatScreenState extends State<ChatScreen> with WidgetsBindingObserver {
         _scrollToBottom();
       });
 
-      // Немедленно отмечаем все непрочитанные сообщения как прочитанные
+      // Отмечаем непрочитанные сообщения
       final unreadIds = _getUnreadMessageIds();
       if (unreadIds.isNotEmpty) {
         print(
@@ -841,16 +884,55 @@ class _ChatScreenState extends State<ChatScreen> with WidgetsBindingObserver {
     });
   }
 
+  // Исправленная ручная синхронизация
   Future<void> _manualSync() async {
     print('🔄 Ручная синхронизация сообщений');
-    await _loadMessages();
 
-    // Принудительно отмечаем все непрочитанные сообщения как прочитанные
-    final unreadIds = _getUnreadMessageIds();
-    if (unreadIds.isNotEmpty) {
-      print(
-          'Отмечаем ${unreadIds.length} сообщений как прочитанные при ручной синхронизации');
-      await _markMessagesAsRead(unreadIds);
+    // Сбрасываем время обновления, чтобы получить все сообщения
+    _lastUpdateTime = 0;
+
+    try {
+      final response = await _supabase
+          .from('messages')
+          .select()
+          .or('sender_id.eq.${widget.currentUserId},receiver_id.eq.${widget.currentUserId}')
+          .order('created_at', ascending: true);
+
+      if (response.isNotEmpty) {
+        setState(() {
+          _messages = List<Map<String, dynamic>>.from(response);
+          final latestMessage = response.reduce((a, b) =>
+              DateTime.parse(a['created_at'])
+                      .isAfter(DateTime.parse(b['created_at']))
+                  ? a
+                  : b);
+          _lastUpdateTime = DateTime.parse(latestMessage['created_at'])
+              .millisecondsSinceEpoch;
+        });
+
+        await _saveMessagesLocally();
+
+        WidgetsBinding.instance.addPostFrameCallback((_) {
+          _scrollToBottom();
+        });
+
+        final unreadIds = _getUnreadMessageIds();
+        if (unreadIds.isNotEmpty) {
+          print(
+              'Отмечаем ${unreadIds.length} сообщений как прочитанные при ручной синхронизации');
+          await _markMessagesAsRead(unreadIds);
+        }
+
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+              content: Text('Синхронизировано ${response.length} сообщений')),
+        );
+      }
+    } catch (e) {
+      print('Ошибка ручной синхронизации: $e');
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('Ошибка синхронизации: $e')),
+      );
     }
   }
 
