@@ -495,7 +495,6 @@ class _ChatScreenState extends State<ChatScreen> with WidgetsBindingObserver {
   List<Map<String, dynamic>> _messages = [];
   bool _isSending = false;
   bool _isUploadingImage = false;
-  bool _isUpdatingStatuses = false;
 
   // Переменные для индикатора набора сообщения
   bool _isFriendTyping = false;
@@ -524,14 +523,13 @@ class _ChatScreenState extends State<ChatScreen> with WidgetsBindingObserver {
 
   // Улучшенный polling
   void _startPolling() {
-    print('⏰ Запускаем polling таймер (интервал: 3 секунды)');
     _pollingTimer = Timer.periodic(const Duration(seconds: 3), (timer) async {
       if (!mounted) {
         print('⏰ Таймер остановлен (widget не mounted)');
         timer.cancel();
         return;
       }
-      print('⏰ Таймер сработал: ${DateTime.now()}');
+
       await _checkForNewMessages();
     });
   }
@@ -539,24 +537,18 @@ class _ChatScreenState extends State<ChatScreen> with WidgetsBindingObserver {
   // Исправленная проверка новых сообщений
   Future<void> _checkForNewMessages() async {
     try {
-      print('=== ПРОВЕРКА НОВЫХ СООБЩЕНИЙ ===');
-
       final response = await _supabase
           .from('messages')
           .select()
           .order('created_at', ascending: false)
           .limit(20);
 
-      print('Получено сообщений: ${response.length}');
-
-      // Ищем новые сообщения
       final newMessages = response
           .where((serverMsg) =>
               !_messages.any((localMsg) => localMsg['id'] == serverMsg['id']))
           .toList();
 
       if (newMessages.isNotEmpty) {
-        print('Найдено ${newMessages.length} новых сообщений');
         setState(() {
           _messages.addAll(newMessages);
           _messages.sort((a, b) => a['created_at'].compareTo(b['created_at']));
@@ -564,15 +556,12 @@ class _ChatScreenState extends State<ChatScreen> with WidgetsBindingObserver {
 
         await _saveMessagesLocally();
         _scrollToBottom();
-
-        // Автоматически отмечаем новые сообщения от друга как прочитанные
         await _markNewMessagesAsRead(newMessages);
       }
 
-      // Всегда обновляем статусы существующих сообщений
       await _updateMessageStatuses();
     } catch (e) {
-      print('ОШИБКА: $e');
+      print('❌ Ошибка проверки новых сообщений: $e');
     }
   }
 
@@ -633,9 +622,7 @@ class _ChatScreenState extends State<ChatScreen> with WidgetsBindingObserver {
   void didChangeAppLifecycleState(AppLifecycleState state) {
     if (state == AppLifecycleState.paused) {
       _stopTyping();
-      print('📱 Приложение свернуто');
     } else if (state == AppLifecycleState.resumed) {
-      print('📱 Приложение активно - принудительная синхронизация');
       // При возвращении в приложение сразу обновляем все
       _checkForNewMessages();
       _updateMessageStatuses();
@@ -712,8 +699,6 @@ class _ChatScreenState extends State<ChatScreen> with WidgetsBindingObserver {
             'При загрузке отмечаем ${unreadIds.length} сообщений как прочитанные');
         await _markMessagesAsRead(unreadIds);
       }
-
-      _debugMessageStatuses();
     } catch (e) {
       print('Ошибка загрузки сообщений: $e');
     }
@@ -811,8 +796,6 @@ class _ChatScreenState extends State<ChatScreen> with WidgetsBindingObserver {
       if (unreadFromFriend.isNotEmpty) {
         final unreadIds =
             unreadFromFriend.map((msg) => msg['id'] as int).toList();
-        print(
-            '📖 Автоматически отмечаем ${unreadIds.length} сообщений как прочитанные');
 
         await _markMessagesAsRead(unreadIds);
 
@@ -859,25 +842,15 @@ class _ChatScreenState extends State<ChatScreen> with WidgetsBindingObserver {
 
   // Упрощенная проверка статусов через polling
   Future<void> _updateMessageStatuses() async {
-    if (_isUpdatingStatuses) return;
-
-    setState(() {
-      _isUpdatingStatuses = true;
-    });
-
     try {
-      // Получаем ID наших отправленных сообщений, которые еще не доставлены/не прочитаны
       final myUndeliveredMessages = _messages
           .where((msg) =>
               msg['sender_id'] == widget.currentUserId &&
               msg['delivered_at'] == null)
           .toList();
 
-      if (myUndeliveredMessages.isEmpty) {
-        return; // Нет сообщений для обновления статусов
-      }
+      if (myUndeliveredMessages.isEmpty) return;
 
-      // Получаем актуальные статусы с сервера
       final messageIds =
           myUndeliveredMessages.map((msg) => msg['id'] as int).toList();
 
@@ -886,7 +859,6 @@ class _ChatScreenState extends State<ChatScreen> with WidgetsBindingObserver {
           .select('id, delivered_at, read_at')
           .inFilter('id', messageIds);
 
-      // Обновляем локальные статусы
       bool hasUpdates = false;
 
       for (var serverMsg in response) {
@@ -895,7 +867,6 @@ class _ChatScreenState extends State<ChatScreen> with WidgetsBindingObserver {
         if (localIndex != -1) {
           final localMsg = _messages[localIndex];
 
-          // Проверяем изменения в статусах
           if (localMsg['delivered_at'] != serverMsg['delivered_at'] ||
               localMsg['read_at'] != serverMsg['read_at']) {
             setState(() {
@@ -912,16 +883,9 @@ class _ChatScreenState extends State<ChatScreen> with WidgetsBindingObserver {
 
       if (hasUpdates) {
         await _saveMessagesLocally();
-        print('✅ Статусы сообщений обновлены');
       }
     } catch (e) {
       print('❌ Ошибка обновления статусов: $e');
-    } finally {
-      if (mounted) {
-        setState(() {
-          _isUpdatingStatuses = false;
-        });
-      }
     }
   }
 
@@ -935,7 +899,6 @@ class _ChatScreenState extends State<ChatScreen> with WidgetsBindingObserver {
 
       try {
         await _updateMessageStatuses();
-        _debugMessageStatuses();
       } catch (e) {
         print('❌ Ошибка в таймере статусов: $e');
       }
@@ -944,8 +907,6 @@ class _ChatScreenState extends State<ChatScreen> with WidgetsBindingObserver {
 
   // Исправленная ручная синхронизация
   Future<void> _manualSync() async {
-    print('🔄 Ручная синхронизация сообщений');
-
     // Сбрасываем время обновления, чтобы получить все сообщения
     _lastUpdateTime = 0;
 
@@ -976,8 +937,6 @@ class _ChatScreenState extends State<ChatScreen> with WidgetsBindingObserver {
 
         final unreadIds = _getUnreadMessageIds();
         if (unreadIds.isNotEmpty) {
-          print(
-              'Отмечаем ${unreadIds.length} сообщений как прочитанные при ручной синхронизации');
           await _markMessagesAsRead(unreadIds);
         }
 
@@ -992,17 +951,6 @@ class _ChatScreenState extends State<ChatScreen> with WidgetsBindingObserver {
         SnackBar(content: Text('Ошибка синхронизации: $e')),
       );
     }
-  }
-
-  void _debugMessageStatuses() {
-    final mySentMessages =
-        _messages.where((m) => m['sender_id'] == widget.currentUserId).toList();
-    final delivered =
-        mySentMessages.where((m) => m['delivered_at'] != null).length;
-    final read = mySentMessages.where((m) => m['read_at'] != null).length;
-
-    print(
-        'Статусы сообщений: Всего отправлено: ${mySentMessages.length}, Доставлено: $delivered, Прочитано: $read');
   }
 
   // Метод отправки сообщения с мгновенным отображением
@@ -1553,11 +1501,6 @@ class _ChatScreenState extends State<ChatScreen> with WidgetsBindingObserver {
         ),
         actions: [
           IconButton(
-            icon: const Icon(Icons.sync, color: Colors.white),
-            onPressed: _manualSync,
-            tooltip: 'Обновить',
-          ),
-          IconButton(
             icon: const Icon(Icons.delete_sweep, color: Colors.white),
             onPressed: _showClearChatDialog,
             tooltip: 'Очистить чат',
@@ -1622,11 +1565,6 @@ class _ChatScreenState extends State<ChatScreen> with WidgetsBindingObserver {
               ],
             ),
           ),
-          if (_isUpdatingStatuses)
-            const LinearProgressIndicator(
-              backgroundColor: Colors.transparent,
-              valueColor: AlwaysStoppedAnimation<Color>(Colors.green),
-            ),
           if (_isUploadingImage)
             const LinearProgressIndicator(
               backgroundColor: Colors.transparent,
