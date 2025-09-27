@@ -1,3 +1,4 @@
+import 'package:supabase/supabase.dart';
 import 'dart:io';
 import 'dart:convert';
 import 'dart:typed_data';
@@ -522,11 +523,14 @@ class _ChatScreenState extends State<ChatScreen> with WidgetsBindingObserver {
 
   // Улучшенный polling
   void _startPolling() {
+    print('⏰ Запускаем polling таймер (интервал: 3 секунды)');
     _pollingTimer = Timer.periodic(const Duration(seconds: 3), (timer) async {
       if (!mounted) {
+        print('⏰ Таймер остановлен (widget не mounted)');
         timer.cancel();
         return;
       }
+      print('⏰ Таймер сработал: ${DateTime.now()}');
       await _checkForNewMessages();
     });
   }
@@ -534,63 +538,44 @@ class _ChatScreenState extends State<ChatScreen> with WidgetsBindingObserver {
   // Исправленная проверка новых сообщений
   Future<void> _checkForNewMessages() async {
     try {
+      print('=== ПРОВЕРКА НОВЫХ СООБЩЕНИЙ ===');
+
+      // Простой запрос без сложных параметров
       final response = await _supabase
           .from('messages')
           .select()
-          .or(
-              'sender_id.eq.${widget.currentUserId},receiver_id.eq.${widget.currentUserId}')
-          .gt(
-              'created_at',
-              DateTime.fromMillisecondsSinceEpoch(_lastUpdateTime)
-                  .toIso8601String())
-          .order('created_at', ascending: true);
+          .order('created_at', ascending: false)
+          .limit(10);
 
-      if (response.isNotEmpty) {
-        print('Найдено ${response.length} новых сообщений');
+      print('Получено сообщений: ${response.length}');
 
-        List<Map<String, dynamic>> newMessages = [];
-        for (var newMessage in response) {
-          if (!_messages.any((msg) => msg['id'] == newMessage['id'])) {
-            newMessages.add(newMessage);
-          }
-        }
+      // Выводим информацию о каждом сообщении
+      for (var msg in response) {
+        print(
+            'Сообщение: ID=${msg['id']}, от=${msg['sender_id']}, к=${msg['receiver_id']}');
+      }
 
-        if (newMessages.isNotEmpty) {
-          setState(() {
-            _messages.addAll(newMessages);
-            // Обновляем время до самого нового сообщения
-            final latestMessage = newMessages.reduce((a, b) =>
-                DateTime.parse(a['created_at'])
-                        .isAfter(DateTime.parse(b['created_at']))
-                    ? a
-                    : b);
-            _lastUpdateTime = DateTime.parse(latestMessage['created_at'])
-                .millisecondsSinceEpoch;
-          });
-
-          await _saveMessagesLocally();
-
-          // Прокручиваем к низу
-          WidgetsBinding.instance.addPostFrameCallback((_) {
-            _scrollToBottom();
-          });
-
-          // Отмечаем новые сообщения как прочитанные
-          final unreadIds = newMessages
-              .where((msg) =>
-                  msg['sender_id'] == widget.friendId &&
-                  msg['receiver_id'] == widget.currentUserId &&
-                  msg['read_at'] == null)
-              .map((msg) => msg['id'] as int)
-              .toList();
-
-          if (unreadIds.isNotEmpty) {
-            await _markMessagesAsRead(unreadIds);
-          }
+      // Ищем новые сообщения
+      int newCount = 0;
+      for (var serverMsg in response) {
+        if (!_messages.any((localMsg) => localMsg['id'] == serverMsg['id'])) {
+          newCount++;
         }
       }
+
+      if (newCount > 0) {
+        print('Найдено $newCount новых сообщений');
+        setState(() {
+          _messages = List<Map<String, dynamic>>.from(response);
+          _messages.sort((a, b) => a['created_at'].compareTo(b['created_at']));
+        });
+        await _saveMessagesLocally();
+        _scrollToBottom();
+      } else {
+        print('Новых сообщений нет');
+      }
     } catch (e) {
-      print('Ошибка при проверке новых сообщений: $e');
+      print('ОШИБКА: $e');
     }
   }
 
@@ -652,7 +637,8 @@ class _ChatScreenState extends State<ChatScreen> with WidgetsBindingObserver {
     if (state == AppLifecycleState.paused) {
       _stopTyping();
     } else if (state == AppLifecycleState.resumed) {
-      // При возвращении в приложение сразу проверяем новые сообщения
+      print('🔄 Приложение вернулось на передний план');
+      // Принудительно проверяем сообщения
       _checkForNewMessages();
       _updateMessageStatuses();
     }
