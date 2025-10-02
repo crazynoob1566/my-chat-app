@@ -522,6 +522,10 @@ class _ChatScreenState extends State<ChatScreen> with WidgetsBindingObserver {
   Timer? _pollingTimer;
   int _lastUpdateTime = DateTime.now().millisecondsSinceEpoch;
 
+  // ДЛЯ УВЕДОМЛЕНИЙ - ДОБАВЛЯЕМ ЭТИ ПЕРЕМЕННЫЕ
+  Timer? _backgroundCheckTimer;
+  int _lastNotifiedMessageId = 0;
+
   @override
   void initState() {
     super.initState();
@@ -540,133 +544,29 @@ class _ChatScreenState extends State<ChatScreen> with WidgetsBindingObserver {
     _startPolling();
     _startMessageStatusChecker();
 
+    // Тест уведомления через 3 секунды
+    Timer(Duration(seconds: 3), _testNotification);
+
     print('✅ Все системы запущены');
   }
 
-  // Улучшенный polling
-  void _startPolling() {
-    _pollingTimer = Timer.periodic(const Duration(seconds: 3), (timer) async {
-      if (!mounted) {
-        print('⏰ Таймер остановлен (widget не mounted)');
-        timer.cancel();
-        return;
-      }
-
-      await _checkForNewMessages();
-    });
-  }
-
-  Future<void> _showLocalNotification(String title, String body) async {
-    try {
-      const AndroidNotificationDetails androidDetails =
-          AndroidNotificationDetails(
-        'chat_channel', // ID канала
-        'Уведомления чата', // Название канала
-        channelDescription: 'Уведомления о новых сообщениях в чате',
-        importance: Importance.max,
-        priority: Priority.high,
-        playSound: true,
-        enableVibration: true,
-      );
-
-      const DarwinNotificationDetails iosDetails = DarwinNotificationDetails(
-        presentAlert: true,
-        presentBadge: true,
-        presentSound: true,
-      );
-
-      const NotificationDetails details = NotificationDetails(
-        android: androidDetails,
-        iOS: iosDetails,
-      );
-
-      // Генерируем уникальный ID для уведомления
-      final int id = DateTime.now().millisecondsSinceEpoch.remainder(100000);
-
-      await notificationsPlugin.show(
-        id,
-        title,
-        body,
-        details,
-      );
-
-      print('📢 Показано уведомление: $title - $body');
-    } catch (e) {
-      print('❌ Ошибка показа уведомления: $e');
-    }
-  }
-
-  void _startRealtimeSubscription() {
-    print('ℹ️ Realtime подписка временно отключена');
-    print('📡 Используем фоновую проверку каждые 30 секунд');
-
-    // Можно добавить здесь простой WebSocket или оставить только фоновую проверку
-    // Для простоты оставляем только фоновую проверку
-  }
-
-  void _handleNewMessage(Map<String, dynamic> newMessage) {
-    // Проверяем, что сообщение для текущего пользователя
-    if (newMessage['receiver_id'] == widget.currentUserId) {
-      final messageId = newMessage['id'] as int;
-      final senderName =
-          users[newMessage['sender_id']]?['name'] ?? 'Неизвестный';
-      final messageType = newMessage['type'] ?? 'text';
-      final messageContent = newMessage['content'] ?? '';
-
-      print('📨 Новое сообщение от $senderName (ID: $messageId)');
-
-      // Показываем уведомление
-      _showLocalNotification(
-        '💬 $senderName',
-        messageType == 'text'
-            ? (messageContent.length > 50
-                ? '${messageContent.substring(0, 50)}...'
-                : messageContent)
-            : '📷 Фото',
-      );
-
-      // Обновляем ID последнего уведомленного сообщения
-      _lastNotifiedMessageId = messageId;
-
-      // Добавляем сообщение в чат если приложение активно
-      if (mounted) {
-        WidgetsBinding.instance.addPostFrameCallback((_) {
-          // Проверяем, нет ли уже этого сообщения в списке
-          if (!_messages.any((msg) => msg['id'] == messageId)) {
-            setState(() {
-              _messages.add(newMessage);
-            });
-            _saveMessagesLocally();
-            _scrollToBottom();
-
-            // Отмечаем как прочитанное
-            _markMessagesAsRead([messageId]);
-          }
-        });
-      }
-    }
-  }
-
-  Timer? _backgroundCheckTimer;
+  // ==================== СИСТЕМА УВЕДОМЛЕНИЙ ====================
 
   void _startBackgroundChecker() {
-    // Останавливаем предыдущий таймер если был
     _backgroundCheckTimer?.cancel();
 
-    // Сначала выполняем немедленную проверку
+    // Немедленная проверка при запуске
     WidgetsBinding.instance.addPostFrameCallback((_) {
       _checkForNewMessagesForNotifications();
     });
 
-    // Запускаем периодическую проверку каждые 20 секунд
+    // Периодическая проверка каждые 20 секунд
     _backgroundCheckTimer =
         Timer.periodic(Duration(seconds: 20), (timer) async {
       if (!mounted) {
-        print('⏹️ Таймер остановлен (widget не mounted)');
         timer.cancel();
         return;
       }
-
       await _checkForNewMessagesForNotifications();
     });
 
@@ -678,8 +578,8 @@ class _ChatScreenState extends State<ChatScreen> with WidgetsBindingObserver {
       if (!mounted) return;
 
       print('🔍 Проверка новых сообщений для уведомлений...');
+      print('📝 Последний известный ID: $_lastNotifiedMessageId');
 
-      // Ищем сообщения новее последнего уведомленного
       final response = await _supabase
           .from('messages')
           .select()
@@ -688,10 +588,9 @@ class _ChatScreenState extends State<ChatScreen> with WidgetsBindingObserver {
           .order('created_at', ascending: false)
           .limit(10);
 
-      if (response.isNotEmpty) {
-        print('📥 Найдено ${response.length} новых сообщений для уведомлений');
+      print('📊 Найдено сообщений для уведомлений: ${response.length}');
 
-        // Сортируем по ID чтобы обрабатывать по порядку
+      if (response.isNotEmpty) {
         final sortedMessages = List<Map<String, dynamic>>.from(response)
           ..sort((a, b) => (a['id'] as int).compareTo(b['id'] as int));
 
@@ -699,12 +598,10 @@ class _ChatScreenState extends State<ChatScreen> with WidgetsBindingObserver {
           await _processNewMessageForNotification(newMessage);
         }
 
-        // Обновляем UI если нужно
+        // Обновляем UI
         if (mounted) {
-          await _checkForNewMessages(); // Используем существующий метод для обновления UI
+          await _checkForNewMessages();
         }
-      } else {
-        print('📭 Новых сообщений для уведомлений нет');
       }
     } catch (e) {
       print('❌ Ошибка проверки уведомлений: $e');
@@ -719,14 +616,11 @@ class _ChatScreenState extends State<ChatScreen> with WidgetsBindingObserver {
     final messageType = newMessage['type'] ?? 'text';
     final messageContent = newMessage['content'] ?? '';
 
-    // Пропускаем если это наше же сообщение (на всякий случай)
-    if (senderId == widget.currentUserId) {
-      return;
-    }
+    // Пропускаем свои сообщения
+    if (senderId == widget.currentUserId) return;
 
     print('📨 Обработка сообщения $messageId от $senderName');
 
-    // Показываем уведомление
     await _showLocalNotification(
       '💬 $senderName',
       messageType == 'text'
@@ -736,10 +630,139 @@ class _ChatScreenState extends State<ChatScreen> with WidgetsBindingObserver {
           : '📷 Фото',
     );
 
-    // Обновляем ID последнего уведомленного сообщения
     _lastNotifiedMessageId = messageId;
-
     print('✅ Уведомление показано для сообщения $messageId');
+  }
+
+  Future<void> _showLocalNotification(String title, String body) async {
+    try {
+      print('🔔 Показываем уведомление: $title - $body');
+
+      const AndroidNotificationDetails androidDetails =
+          AndroidNotificationDetails(
+        'chat_channel',
+        'Уведомления чата',
+        channelDescription: 'Уведомления о новых сообщениях в чате',
+        importance: Importance.max,
+        priority: Priority.high,
+        playSound: true,
+        enableVibration: true,
+        colorized: true,
+        color: Color(0xFF1976D2),
+      );
+
+      const DarwinNotificationDetails iosDetails = DarwinNotificationDetails(
+        presentAlert: true,
+        presentBadge: true,
+        presentSound: true,
+        badgeNumber: 1,
+      );
+
+      const NotificationDetails details = NotificationDetails(
+        android: androidDetails,
+        iOS: iosDetails,
+      );
+
+      final int id = DateTime.now().millisecondsSinceEpoch.remainder(100000);
+
+      await notificationsPlugin.show(
+        id,
+        title,
+        body,
+        details,
+        payload: 'chat_notification',
+      );
+
+      print('✅ Уведомление успешно показано');
+    } catch (e) {
+      print('❌ Ошибка показа уведомления: $e');
+    }
+  }
+
+  void _testNotification() {
+    _showLocalNotification(
+      'Тест уведомления 🎯',
+      'Привет! Это проверка работы уведомлений в чате!',
+    );
+
+    // Показываем snackbar для подтверждения
+    if (mounted) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text('Тестовое уведомление отправлено!'),
+          duration: Duration(seconds: 2),
+        ),
+      );
+    }
+  }
+
+  // ==================== МЕТОДЫ ДЛЯ ТИПИНГА (ДОБАВЛЯЕМ ИХ) ====================
+
+  Future<void> _sendTypingEvent(bool isTyping) async {
+    if (!_isTypingFeatureAvailable) return;
+
+    try {
+      await _supabase.from('typing_indicators').upsert({
+        'user_id': widget.currentUserId,
+        'friend_id': widget.friendId,
+        'is_typing': isTyping,
+        'last_updated': DateTime.now().toIso8601String(),
+      });
+    } catch (e) {
+      print('Ошибка отправки события набора: $e');
+      // Если возникает ошибка, отключаем функцию типинга
+      setState(() {
+        _isTypingFeatureAvailable = false;
+      });
+    }
+  }
+
+  void _startTyping() {
+    _lastTypingTime = DateTime.now();
+    _sendTypingEvent(true);
+  }
+
+  void _stopTyping() {
+    _sendTypingEvent(false);
+  }
+
+  void _handleTyping() {
+    _lastTypingTime = DateTime.now();
+
+    _typingDebounceTimer?.cancel();
+    _typingDebounceTimer = Timer(const Duration(milliseconds: 300), () {
+      _startTyping();
+    });
+
+    _typingTimer?.cancel();
+    _typingTimer = Timer(const Duration(seconds: 2), () {
+      if (DateTime.now().difference(_lastTypingTime).inSeconds >= 2) {
+        _stopTyping();
+      }
+    });
+  }
+
+  // ==================== СУЩЕСТВУЮЩИЕ МЕТОДЫ ====================
+
+  void _startRealtimeSubscription() {
+    print('ℹ️ Realtime подписка временно отключена');
+  }
+
+  void _handleNewMessage(Map<String, dynamic> newMessage) {
+    // Этот метод сейчас не используется, но оставляем для будущего
+  }
+
+  // Улучшенный polling
+  void _startPolling() {
+    _pollingTimer = Timer.periodic(const Duration(seconds: 3), (timer) async {
+      if (!mounted) {
+        print('⏰ Таймер остановлен (widget не mounted)');
+        timer.cancel();
+        return;
+      }
+
+      await _checkForNewMessages();
+    });
   }
 
   // Исправленная проверка новых сообщений
@@ -773,54 +796,12 @@ class _ChatScreenState extends State<ChatScreen> with WidgetsBindingObserver {
     }
   }
 
-  Future<void> _sendTypingEvent(bool isTyping) async {
-    if (!_isTypingFeatureAvailable) return;
-
-    try {
-      await _supabase.from('typing_indicators').upsert({
-        'user_id': widget.currentUserId,
-        'friend_id': widget.friendId,
-        'is_typing': isTyping,
-        'last_updated': DateTime.now().toIso8601String(),
-      });
-    } catch (e) {
-      print('Ошибка отправки события набора: $e');
-    }
-  }
-
-  void _startTyping() {
-    _lastTypingTime = DateTime.now();
-    _sendTypingEvent(true);
-  }
-
-  void _stopTyping() {
-    _sendTypingEvent(false);
-  }
-
-  void _handleTyping() {
-    _lastTypingTime = DateTime.now();
-
-    _typingDebounceTimer?.cancel();
-    _typingDebounceTimer = Timer(const Duration(milliseconds: 300), () {
-      _startTyping();
-    });
-
-    _typingTimer?.cancel();
-    _typingTimer = Timer(const Duration(seconds: 2), () {
-      if (DateTime.now().difference(_lastTypingTime).inSeconds >= 2) {
-        _stopTyping();
-      }
-    });
-  }
-
   @override
   void dispose() {
     // Отменяем таймеры и подписки
     _pollingTimer?.cancel();
     _backgroundCheckTimer?.cancel();
-    // УДАЛИТЬ ЭТУ СТРОКУ: _messageChannel.unsubscribe();
-
-    _stopTyping();
+    _stopTyping(); // Теперь этот метод существует
     WidgetsBinding.instance.removeObserver(this);
     _messageController.dispose();
     _scrollController.dispose();
@@ -835,7 +816,7 @@ class _ChatScreenState extends State<ChatScreen> with WidgetsBindingObserver {
   @override
   void didChangeAppLifecycleState(AppLifecycleState state) {
     if (state == AppLifecycleState.paused) {
-      _stopTyping();
+      _stopTyping(); // Теперь этот метод существует
     } else if (state == AppLifecycleState.resumed) {
       // При возвращении в приложение сразу обновляем все
       _checkForNewMessages();
@@ -887,7 +868,6 @@ class _ChatScreenState extends State<ChatScreen> with WidgetsBindingObserver {
         });
 
         // Инициализируем последний ID сообщения для уведомлений
-        // Находим максимальный ID среди всех сообщений
         int maxId = 0;
         for (final msg in response) {
           final msgId = msg['id'] as int;
@@ -917,31 +897,6 @@ class _ChatScreenState extends State<ChatScreen> with WidgetsBindingObserver {
       }
     } catch (e) {
       print('Ошибка загрузки сообщений: $e');
-    }
-  }
-
-  Future<void> _showNotification(String title, String body) async {
-    try {
-      const AndroidNotificationDetails androidDetails =
-          AndroidNotificationDetails(
-        'chat_channel',
-        'Уведомления чата',
-        channelDescription: 'Уведомления о новых сообщениях',
-        importance: Importance.max,
-        priority: Priority.high,
-      );
-
-      const NotificationDetails details =
-          NotificationDetails(android: androidDetails);
-
-      await notificationsPlugin.show(
-        DateTime.now().millisecondsSinceEpoch.remainder(100000),
-        title,
-        body,
-        details,
-      );
-    } catch (e) {
-      print('Ошибка показа уведомления: $e');
     }
   }
 
@@ -1696,19 +1651,19 @@ class _ChatScreenState extends State<ChatScreen> with WidgetsBindingObserver {
               backgroundColor: friendInfo['avatarColor'],
               child: Text(
                 friendInfo['avatarText'],
-                style: const TextStyle(color: Colors.white),
+                style: TextStyle(color: Colors.white),
               ),
             ),
-            const SizedBox(width: 12),
+            SizedBox(width: 12),
             Text(
               'Чат с ${friendInfo['name']}',
-              style: const TextStyle(color: Colors.white),
+              style: TextStyle(color: Colors.white),
             ),
           ],
         ),
         backgroundColor: blue700,
         leading: IconButton(
-          icon: const Icon(Icons.arrow_back, color: Colors.white),
+          icon: Icon(Icons.arrow_back, color: Colors.white),
           onPressed: () => Navigator.pushReplacement(
             context,
             MaterialPageRoute(
@@ -1716,8 +1671,14 @@ class _ChatScreenState extends State<ChatScreen> with WidgetsBindingObserver {
           ),
         ),
         actions: [
+          // ДОБАВЛЯЕМ КНОПКУ ТЕСТА УВЕДОМЛЕНИЙ
           IconButton(
-            icon: const Icon(Icons.delete_sweep, color: Colors.white),
+            icon: Icon(Icons.notifications, color: Colors.white),
+            onPressed: _testNotification,
+            tooltip: 'Тест уведомлений',
+          ),
+          IconButton(
+            icon: Icon(Icons.delete_sweep, color: Colors.white),
             onPressed: _showClearChatDialog,
             tooltip: 'Очистить чат',
           ),
@@ -1725,6 +1686,17 @@ class _ChatScreenState extends State<ChatScreen> with WidgetsBindingObserver {
       ),
       body: Column(
         children: [
+          // Информационная панель о состоянии уведомлений
+          Container(
+            padding: EdgeInsets.symmetric(vertical: 4),
+            color: Colors.blue.withOpacity(0.1),
+            child: Center(
+              child: Text(
+                'Уведомления активны • Последний ID: $_lastNotifiedMessageId',
+                style: TextStyle(fontSize: 12, color: Colors.blue),
+              ),
+            ),
+          ),
           if (!_isTypingFeatureAvailable)
             Container(
               padding: const EdgeInsets.symmetric(vertical: 4),
@@ -1826,9 +1798,9 @@ class _ChatScreenState extends State<ChatScreen> with WidgetsBindingObserver {
                       ),
                       onChanged: (text) {
                         if (text.isNotEmpty) {
-                          _handleTyping();
+                          _handleTyping(); // Теперь этот метод существует
                         } else {
-                          _stopTyping();
+                          _stopTyping(); // Теперь этот метод существует
                           _typingDebounceTimer?.cancel();
                         }
                       },
