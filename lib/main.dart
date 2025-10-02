@@ -74,6 +74,44 @@ Future<void> main() async {
   }
 
   runApp(const MyApp());
+
+  // Тестовое уведомление при запуске через 5 секунд
+  await Future.delayed(const Duration(seconds: 5));
+  _showStartupNotification();
+}
+
+// Функция для тестового уведомления при запуске
+Future<void> _showStartupNotification() async {
+  try {
+    print('🚀 Пытаемся показать стартовое уведомление...');
+
+    const AndroidNotificationDetails androidDetails =
+        AndroidNotificationDetails(
+      'startup_channel',
+      'Startup Notifications',
+      channelDescription: 'Notifications on app startup',
+      importance: Importance.max,
+      priority: Priority.high,
+    );
+
+    const DarwinNotificationDetails iosDetails = DarwinNotificationDetails();
+
+    const NotificationDetails details = NotificationDetails(
+      android: androidDetails,
+      iOS: iosDetails,
+    );
+
+    await notificationsPlugin.show(
+      888,
+      'Приложение запущено 🚀',
+      'Тестирование уведомлений при запуске',
+      details,
+    );
+
+    print('✅ Стартовое уведомление отправлено');
+  } catch (e) {
+    print('❌ Ошибка стартового уведомления: $e');
+  }
 }
 
 Future<void> _initializeNotifications() async {
@@ -99,6 +137,202 @@ Future<void> _initializeNotifications() async {
         badge: true,
         sound: true,
       );
+}
+
+class NotificationTestScreen extends StatefulWidget {
+  const NotificationTestScreen({super.key});
+
+  @override
+  State<NotificationTestScreen> createState() => _NotificationTestScreenState();
+}
+
+class _NotificationTestScreenState extends State<NotificationTestScreen> {
+  Future<void> _showSimpleNotification() async {
+    try {
+      print('🔄 Пытаемся показать уведомление...');
+
+      // Максимально простые настройки
+      const AndroidNotificationDetails androidDetails =
+          AndroidNotificationDetails(
+        'test_channel',
+        'Test Channel',
+        channelDescription: 'Test Channel for Notifications',
+        importance: Importance.max,
+        priority: Priority.high,
+      );
+
+      const DarwinNotificationDetails iosDetails = DarwinNotificationDetails();
+
+      const NotificationDetails details = NotificationDetails(
+        android: androidDetails,
+        iOS: iosDetails,
+      );
+
+      await notificationsPlugin.show(
+        999,
+        'Тестовое уведомление 🎯',
+        'Если вы видите это, уведомления работают!',
+        details,
+      );
+
+      print('✅ Уведомление отправлено в систему');
+
+      // Показываем подтверждение в интерфейсе
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text('Уведомление отправлено!'),
+            backgroundColor: Colors.green,
+          ),
+        );
+      }
+    } catch (e) {
+      print('❌ Ошибка: $e');
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('Ошибка: $e'),
+            backgroundColor: Colors.red,
+          ),
+        );
+      }
+    }
+  }
+
+  Future<void> _checkPermissions() async {
+    try {
+      print('🔍 Проверяем разрешения...');
+
+      // Для iOS
+      final bool? iOSPermissions = await notificationsPlugin
+          .resolvePlatformSpecificImplementation<
+              IOSFlutterLocalNotificationsPlugin>()
+          ?.requestPermissions(
+            alert: true,
+            badge: true,
+            sound: true,
+          );
+
+      print('📱 iOS Permissions: $iOSPermissions');
+
+      // Для Android
+      final List<ActiveNotification>? activeNotifications =
+          await notificationsPlugin
+              .resolvePlatformSpecificImplementation<
+                  AndroidFlutterLocalNotificationsPlugin>()
+              ?.getActiveNotifications();
+
+      print('🤖 Android Active Notifications: ${activeNotifications?.length}');
+
+      // Показываем результат в интерфейсе
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('Разрешения iOS: $iOSPermissions'),
+            duration: const Duration(seconds: 3),
+          ),
+        );
+      }
+    } catch (e) {
+      print('❌ Ошибка проверки разрешений: $e');
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('Ошибка проверки: $e'),
+            backgroundColor: Colors.red,
+          ),
+        );
+      }
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Scaffold(
+      appBar: AppBar(
+        title: const Text('Тест уведомлений'),
+        backgroundColor: Colors.blue,
+      ),
+      body: Padding(
+        padding: const EdgeInsets.all(20.0),
+        child: Column(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            const Text(
+              'Тестирование уведомлений',
+              style: TextStyle(fontSize: 24, fontWeight: FontWeight.bold),
+            ),
+            const SizedBox(height: 30),
+            const Text(
+              'Нажмите кнопки ниже для тестирования уведомлений.',
+              textAlign: TextAlign.center,
+              style: TextStyle(fontSize: 16),
+            ),
+            const SizedBox(height: 20),
+            ElevatedButton(
+              onPressed: _checkPermissions,
+              style: ElevatedButton.styleFrom(
+                backgroundColor: Colors.orange,
+                padding:
+                    const EdgeInsets.symmetric(horizontal: 30, vertical: 15),
+              ),
+              child: const Text(
+                '🔍 Проверить разрешения',
+                style: TextStyle(fontSize: 18),
+              ),
+            ),
+            const SizedBox(height: 15),
+            ElevatedButton(
+              onPressed: _showSimpleNotification,
+              style: ElevatedButton.styleFrom(
+                backgroundColor: Colors.green,
+                padding:
+                    const EdgeInsets.symmetric(horizontal: 30, vertical: 15),
+              ),
+              child: const Text(
+                '🔔 Показать уведомление',
+                style: TextStyle(fontSize: 18),
+              ),
+            ),
+            const SizedBox(height: 15),
+            ElevatedButton(
+              onPressed: () {
+                Navigator.pushReplacement(
+                  context,
+                  MaterialPageRoute(
+                      builder: (context) => const UserSelectionScreen()),
+                );
+              },
+              style: ElevatedButton.styleFrom(
+                backgroundColor: Colors.blue,
+                padding:
+                    const EdgeInsets.symmetric(horizontal: 30, vertical: 15),
+              ),
+              child: const Text(
+                '← Вернуться в чат',
+                style: TextStyle(fontSize: 18),
+              ),
+            ),
+            const SizedBox(height: 30),
+            const Divider(),
+            const Text(
+              'Инструкция:',
+              style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold),
+            ),
+            const SizedBox(height: 10),
+            const Text(
+              '1. Нажмите "Проверить разрешения"\n'
+              '2. Нажмите "Показать уведомление"\n'
+              '3. Проверьте консоль для отладки\n'
+              '4. Сверните приложение и повторите тест',
+              textAlign: TextAlign.center,
+              style: TextStyle(fontSize: 14),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
 }
 
 class MyApp extends StatelessWidget {
@@ -394,6 +628,17 @@ class _UserSelectionScreenState extends State<UserSelectionScreen> {
         title: const Text('Выберите пользователя'),
         backgroundColor: blue700,
         actions: [
+          IconButton(
+            icon: const Icon(Icons.notifications, color: Colors.white),
+            onPressed: () {
+              Navigator.push(
+                context,
+                MaterialPageRoute(
+                    builder: (context) => const NotificationTestScreen()),
+              );
+            },
+            tooltip: 'Тест уведомлений',
+          ),
           IconButton(
             icon: const Icon(Icons.lock, color: Colors.white),
             onPressed: _showChangePasswordDialog,

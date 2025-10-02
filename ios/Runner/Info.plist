@@ -2,10 +2,7 @@
 <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
 <plist version="1.0">
 <dict>
-    <key>NSPhotoLibraryAddUsageDescription</key>
-    <string>Приложению требуется доступ для сохранения изображений в вашу медиатеку</string>
-    <key>NSPhotoLibraryUsageDescription</key>
-    <string>Приложению требуется доступ для сохранения изображений в вашу медиатеку</string>
+    <!-- Разрешения для фото и камеры -->
     <key>NSCameraUsageDescription</key>
     <string>Для отправки фотографий в чат</string>
     <key>NSPhotoLibraryUsageDescription</key>
@@ -13,21 +10,19 @@
     <key>NSPhotoLibraryAddUsageDescription</key>
     <string>Для сохранения фотографий в галерею</string>
     
-    <!-- Ключи для уведомлений -->
+    <!-- === ВАЖНО: Ключи для уведомлений === -->
     <key>UIBackgroundModes</key>
     <array>
         <string>fetch</string>
         <string>remote-notification</string>
     </array>
-    
-    <!-- Дополнительные ключи для уведомлений -->
+    <key>NSUserNotificationsUsageDescription</key>
+    <string>Это приложение отправляет уведомления о новых сообщениях в чате</string>
     <key>FirebaseAppDelegateProxyEnabled</key>
     <false/>
-    
-    <!-- Ключи для разрешений -->
-    <key>NSUserNotificationsUsageDescription</key>
-    <string>Для отправки уведомлений о новых сообщениях</string>
-    
+    <!-- === КОНЕЦ ключей для уведомлений === -->
+
+	<!-- Базовые настройки приложения -->
 	<key>CFBundleDevelopmentRegion</key>
 	<string>$(DEVELOPMENT_LANGUAGE)</string>
 	<key>CFBundleDisplayName</key>
@@ -72,7 +67,7 @@
 	<key>UIApplicationSupportsIndirectInputEvents</key>
 	<true/>
 	
-	<!-- Добавленные ключи для решения проблем -->
+	<!-- Настройки сети -->
 	<key>NSAppTransportSecurity</key>
 	<dict>
 		<key>NSAllowsArbitraryLoads</key>
