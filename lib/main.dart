@@ -534,20 +534,96 @@ class _ChatScreenState extends State<ChatScreen> with WidgetsBindingObserver {
 
     print('🚀 Чат инициализирован для пользователя: ${widget.currentUserId}');
 
-    // Загружаем сообщения
+    // Запускаем диагностику СРАЗУ
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      _checkNotificationSystem();
+    });
+
     _loadMessages();
-
-    // Запускаем фоновую проверку для уведомлений
     _startBackgroundChecker();
-
-    // Запускаем polling для обновления статусов
     _startPolling();
     _startMessageStatusChecker();
 
-    // Тест уведомления через 3 секунды
-    Timer(Duration(seconds: 3), _testNotification);
-
     print('✅ Все системы запущены');
+  }
+
+  void _checkNotificationSystem() async {
+    print('🔍 Диагностика системы уведомлений:');
+
+    try {
+      // Проверяем платформу
+      print('📱 Платформа: ${Theme.of(context).platform}');
+
+      // Простой тест без сложных настроек
+      print('🎯 Отправляем тестовое уведомление...');
+      _showSimpleNotification();
+    } catch (e) {
+      print('❌ Ошибка диагностики: $e');
+    }
+  }
+
+  void _testBackgroundNotification() {
+    print('🎯 Тестируем фоновые уведомления...');
+
+    // Ждем 2 секунды и показываем уведомление
+    Timer(Duration(seconds: 2), () async {
+      print('📨 Отправка фонового уведомления...');
+
+      // Показываем уведомление
+      await _showLocalNotification(
+        'Фоновый тест 📱',
+        'Это уведомление пришло когда приложение было в фоне',
+      );
+
+      // Также показываем Snackbar для подтверждения
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text(
+                'Фоновое уведомление отправлено! Сверните приложение чтобы увидеть его.'),
+            duration: Duration(seconds: 3),
+          ),
+        );
+      }
+    });
+  }
+
+  void _showSimpleNotification() async {
+    try {
+      // Убираем const
+      final AndroidNotificationDetails androidDetails =
+          AndroidNotificationDetails(
+        'simple_channel',
+        'Простые уведомления',
+        channelDescription: 'Канал для тестовых уведомлений',
+        importance: Importance.max,
+        priority: Priority.high,
+        playSound: true,
+        enableVibration: true,
+      );
+
+      final DarwinNotificationDetails iosDetails = DarwinNotificationDetails(
+        presentAlert: true,
+        presentBadge: true,
+        presentSound: true,
+      );
+
+      final NotificationDetails details = NotificationDetails(
+        android: androidDetails,
+        iOS: iosDetails,
+      );
+
+      await notificationsPlugin.show(
+        12345,
+        'Тест уведомления 🔔',
+        'Если вы видите это, уведомления работают!',
+        details,
+      );
+
+      print('✅ Простое уведомление отправлено');
+    } catch (e) {
+      print('❌ Ошибка простого уведомления: $e');
+    }
   }
 
   // ==================== СИСТЕМА УВЕДОМЛЕНИЙ ====================
@@ -638,9 +714,10 @@ class _ChatScreenState extends State<ChatScreen> with WidgetsBindingObserver {
     try {
       print('🔔 Показываем уведомление: $title - $body');
 
-      const AndroidNotificationDetails androidDetails =
+      // Убираем const для AndroidNotificationDetails
+      final AndroidNotificationDetails androidDetails =
           AndroidNotificationDetails(
-        'chat_channel',
+        'chat_channel_v2',
         'Уведомления чата',
         channelDescription: 'Уведомления о новых сообщениях в чате',
         importance: Importance.max,
@@ -648,17 +725,21 @@ class _ChatScreenState extends State<ChatScreen> with WidgetsBindingObserver {
         playSound: true,
         enableVibration: true,
         colorized: true,
-        color: Color(0xFF1976D2),
+        color: const Color(0xFF1976D2),
+        channelShowBadge: true,
+        autoCancel: true,
       );
 
-      const DarwinNotificationDetails iosDetails = DarwinNotificationDetails(
+      // Убираем const для DarwinNotificationDetails
+      final DarwinNotificationDetails iosDetails = DarwinNotificationDetails(
         presentAlert: true,
         presentBadge: true,
         presentSound: true,
         badgeNumber: 1,
       );
 
-      const NotificationDetails details = NotificationDetails(
+      // Убираем const для NotificationDetails
+      final NotificationDetails details = NotificationDetails(
         android: androidDetails,
         iOS: iosDetails,
       );
@@ -670,12 +751,32 @@ class _ChatScreenState extends State<ChatScreen> with WidgetsBindingObserver {
         title,
         body,
         details,
-        payload: 'chat_notification',
       );
 
-      print('✅ Уведомление успешно показано');
+      print('✅ Уведомление успешно показано (ID: $id)');
+
+      // Логируем в интерфейсе
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('Уведомление отправлено: $title'),
+            duration: Duration(seconds: 2),
+          ),
+        );
+      }
     } catch (e) {
       print('❌ Ошибка показа уведомления: $e');
+
+      // Показываем ошибку в интерфейсе
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('Ошибка уведомления: ${e.toString()}'),
+            backgroundColor: Colors.red,
+            duration: Duration(seconds: 3),
+          ),
+        );
+      }
     }
   }
 
@@ -1672,6 +1773,23 @@ class _ChatScreenState extends State<ChatScreen> with WidgetsBindingObserver {
         ),
         actions: [
           // ДОБАВЛЯЕМ КНОПКУ ТЕСТА УВЕДОМЛЕНИЙ
+          IconButton(
+            icon: Icon(Icons.bug_report, color: Colors.white),
+            onPressed: _checkNotificationSystem,
+            tooltip: 'Диагностика уведомлений',
+          ),
+          // Кнопка простого теста
+          IconButton(
+            icon: Icon(Icons.notification_add, color: Colors.white),
+            onPressed: _showSimpleNotification,
+            tooltip: 'Простой тест',
+          ),
+          // Кнопка фонового теста
+          IconButton(
+            icon: Icon(Icons.phone_android, color: Colors.white),
+            onPressed: _testBackgroundNotification,
+            tooltip: 'Тест в фоне',
+          ),
           IconButton(
             icon: Icon(Icons.notifications, color: Colors.white),
             onPressed: _testNotification,

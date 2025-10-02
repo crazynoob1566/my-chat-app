@@ -12,6 +12,22 @@
     <string>Для выбора фотографий из галереи</string>
     <key>NSPhotoLibraryAddUsageDescription</key>
     <string>Для сохранения фотографий в галерею</string>
+    
+    <!-- Ключи для уведомлений -->
+    <key>UIBackgroundModes</key>
+    <array>
+        <string>fetch</string>
+        <string>remote-notification</string>
+    </array>
+    
+    <!-- Дополнительные ключи для уведомлений -->
+    <key>FirebaseAppDelegateProxyEnabled</key>
+    <false/>
+    
+    <!-- Ключи для разрешений -->
+    <key>NSUserNotificationsUsageDescription</key>
+    <string>Для отправки уведомлений о новых сообщениях</string>
+    
 	<key>CFBundleDevelopmentRegion</key>
 	<string>$(DEVELOPMENT_LANGUAGE)</string>
 	<key>CFBundleDisplayName</key>
@@ -55,12 +71,6 @@
 	<true/>
 	<key>UIApplicationSupportsIndirectInputEvents</key>
 	<true/>
-	
-	<key>UIBackgroundModes</key>
-	<array>
-		<string>fetch</string>
-		<string>remote-notification</string>
-	</array>
 	
 	<!-- Добавленные ключи для решения проблем -->
 	<key>NSAppTransportSecurity</key>
