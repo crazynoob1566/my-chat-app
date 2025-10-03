@@ -24,7 +24,7 @@ dependencies:
   image_gallery_saver: ^2.0.3  # Для сохранения изображений
   permission_handler: ^11.0.1  # Для запроса разрешений
   http: ^1.1.0  # Для загрузки изображений по URL
-
+  
 dev_dependencies:
   flutter_test:
     sdk: flutter

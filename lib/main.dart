@@ -1,8 +1,8 @@
+import 'package:flutter/material.dart';
 import 'package:supabase/supabase.dart';
 import 'dart:io';
 import 'dart:convert';
 import 'dart:typed_data';
-import 'package:flutter/material.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import 'package:intl/intl.dart';
 import 'package:shared_preferences/shared_preferences.dart';
@@ -17,6 +17,181 @@ import 'package:image_gallery_saver/image_gallery_saver.dart';
 import 'package:permission_handler/permission_handler.dart';
 import 'package:http/http.dart' as http;
 import 'dart:async';
+import 'pushy_service.dart';
+
+// ==================== PUSHY SERVICE (HTTP-ONLY) ====================
+import 'dart:math';
+
+class PushyService {
+  // ЗАМЕНИТЕ НА ВАШ SECRET API KEY ИЗ PUSHY DASHBOARD
+  static const String pushyApiKey =
+      '71c1296829765c1250f2ff61f49225c393913d6a131e63719ff4726f3d0a5a70';
+
+  // Генерируем уникальный токен устройства
+  static String _generateDeviceToken() {
+    final random = Random();
+    const chars = 'abcdefghijklmnopqrstuvwxyz0123456789';
+    return List.generate(64, (index) => chars[random.nextInt(chars.length)])
+        .join();
+  }
+
+  static Future<String?> initializePushy(String userId) async {
+    try {
+      print('🚀 Инициализация Pushy для пользователя: $userId');
+
+      // Генерируем или получаем существующий токен
+      final prefs = await SharedPreferences.getInstance();
+      String? deviceToken = prefs.getString('pushy_token_$userId');
+
+      if (deviceToken == null) {
+        deviceToken = _generateDeviceToken();
+        await prefs.setString('pushy_token_$userId', deviceToken);
+        print('✅ Сгенерирован новый токен устройства: $deviceToken');
+      } else {
+        print('✅ Используем существующий токен: $deviceToken');
+      }
+
+      // Сохраняем токен в Supabase
+      await _savePushyTokenToSupabase(userId, deviceToken);
+
+      return deviceToken;
+    } catch (e) {
+      print('❌ Ошибка инициализации Pushy: $e');
+      return null;
+    }
+  }
+
+  static Future<void> _savePushyTokenToSupabase(
+      String userId, String token) async {
+    try {
+      final supabase = Supabase.instance.client;
+      await supabase.from('user_tokens').upsert({
+        'user_id': userId,
+        'pushy_token': token,
+        'updated_at': DateTime.now().toIso8601String(),
+      });
+      print('✅ Токен сохранен в Supabase');
+    } catch (e) {
+      print('❌ Ошибка сохранения токена в Supabase: $e');
+    }
+  }
+
+  static Future<bool> sendPushNotification({
+    required String toUserId,
+    required String fromUserId,
+    required String fromUserName,
+    required String messageText,
+  }) async {
+    try {
+      print('📤 Отправка пуш-уведомления пользователю: $toUserId');
+
+      // Получаем токен получателя из Supabase
+      final supabase = Supabase.instance.client;
+
+      // ИСПРАВЛЕНИЕ: Убираем .execute()
+      final response = await supabase
+          .from('user_tokens')
+          .select('pushy_token')
+          .eq('user_id', toUserId);
+
+      if (response.isEmpty) {
+        print('❌ Пользователь $toUserId не найден в таблице токенов');
+        return false;
+      }
+
+      String recipientToken = response.first['pushy_token'];
+      print('📱 Токен получателя: $recipientToken');
+
+      // Подготавливаем текст уведомления
+      String notificationBody = messageText.length > 50
+          ? '${messageText.substring(0, 50)}...'
+          : messageText;
+
+      // Отправляем пуш через Pushy API
+      final pushResponse = await http.post(
+        Uri.parse('https://api.pushy.me/push?api_key=$pushyApiKey'),
+        headers: {'Content-Type': 'application/json'},
+        body: json.encode({
+          'to': recipientToken,
+          'data': {
+            'title': '💬 Новое сообщение',
+            'message': '$fromUserName: $messageText',
+            'from_user_id': fromUserId,
+            'to_user_id': toUserId,
+            'type': 'new_message',
+            'timestamp': DateTime.now().toIso8601String(),
+          },
+          'notification': {
+            'title': '💬 $fromUserName',
+            'body': notificationBody,
+            'badge': 1,
+            'sound': 'default'
+          },
+          'time_to_live': 3600, // 1 час
+        }),
+      );
+
+      print('📤 Ответ от Pushy API: ${pushResponse.statusCode}');
+
+      if (pushResponse.statusCode == 200) {
+        print('✅ Пуш-уведомление успешно отправлено');
+        return true;
+      } else {
+        print(
+            '❌ Ошибка отправки пуша: ${pushResponse.statusCode} - ${pushResponse.body}');
+        return false;
+      }
+    } catch (e) {
+      print('❌ Ошибка отправки пуш-уведомления: $e');
+      return false;
+    }
+  }
+
+  // Метод для обработки входящих уведомлений (если нужно)
+  static void handleIncomingNotification(Map<String, dynamic> data) {
+    print('📨 Получено пуш-уведомление: $data');
+
+    String title = data['title'] ?? 'Новое сообщение';
+    String message = data['message'] ?? 'У вас новое сообщение в чате';
+
+    // Показываем локальное уведомление
+    _showLocalNotification(title, message);
+  }
+
+  static Future<void> _showLocalNotification(
+      String title, String message) async {
+    const AndroidNotificationDetails androidPlatformChannelSpecifics =
+        AndroidNotificationDetails(
+      'pushy_channel',
+      'Pushy Notifications',
+      channelDescription: 'Канал для push-уведомлений от Pushy',
+      importance: Importance.max,
+      priority: Priority.high,
+      showWhen: true,
+    );
+
+    const DarwinNotificationDetails iosPlatformChannelSpecifics =
+        DarwinNotificationDetails();
+
+    const NotificationDetails platformChannelSpecifics = NotificationDetails(
+      android: androidPlatformChannelSpecifics,
+      iOS: iosPlatformChannelSpecifics,
+    );
+
+    await notificationsPlugin.show(
+      DateTime.now().millisecondsSinceEpoch.remainder(100000),
+      title,
+      message,
+      platformChannelSpecifics,
+    );
+  }
+}
+
+// ==================== КОНЕЦ PUSHY SERVICE ====================
+
+// Глобальная переменная для уведомлений
+FlutterLocalNotificationsPlugin notificationsPlugin =
+    FlutterLocalNotificationsPlugin();
 
 // Конфигурационные константы
 const String _defaultSupabaseUrl = 'https://tpwjupuaflpswdvudexi.supabase.co';
@@ -49,11 +224,6 @@ final Map<String, Map<String, dynamic>> users = {
   },
 };
 
-// Глобальная переменная для уведомлений
-FlutterLocalNotificationsPlugin notificationsPlugin =
-    FlutterLocalNotificationsPlugin();
-int _lastNotifiedMessageId = 0;
-
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
 
@@ -74,44 +244,6 @@ Future<void> main() async {
   }
 
   runApp(const MyApp());
-
-  // Тестовое уведомление при запуске через 5 секунд
-  await Future.delayed(const Duration(seconds: 5));
-  _showStartupNotification();
-}
-
-// Функция для тестового уведомления при запуске
-Future<void> _showStartupNotification() async {
-  try {
-    print('🚀 Пытаемся показать стартовое уведомление...');
-
-    const AndroidNotificationDetails androidDetails =
-        AndroidNotificationDetails(
-      'startup_channel',
-      'Startup Notifications',
-      channelDescription: 'Notifications on app startup',
-      importance: Importance.max,
-      priority: Priority.high,
-    );
-
-    const DarwinNotificationDetails iosDetails = DarwinNotificationDetails();
-
-    const NotificationDetails details = NotificationDetails(
-      android: androidDetails,
-      iOS: iosDetails,
-    );
-
-    await notificationsPlugin.show(
-      888,
-      'Приложение запущено 🚀',
-      'Тестирование уведомлений при запуске',
-      details,
-    );
-
-    print('✅ Стартовое уведомление отправлено');
-  } catch (e) {
-    print('❌ Ошибка стартового уведомления: $e');
-  }
 }
 
 Future<void> _initializeNotifications() async {
@@ -129,210 +261,7 @@ Future<void> _initializeNotifications() async {
     iOS: iosSettings,
   );
 
-  await notificationsPlugin
-      .resolvePlatformSpecificImplementation<
-          IOSFlutterLocalNotificationsPlugin>()
-      ?.requestPermissions(
-        alert: true,
-        badge: true,
-        sound: true,
-      );
-}
-
-class NotificationTestScreen extends StatefulWidget {
-  const NotificationTestScreen({super.key});
-
-  @override
-  State<NotificationTestScreen> createState() => _NotificationTestScreenState();
-}
-
-class _NotificationTestScreenState extends State<NotificationTestScreen> {
-  Future<void> _showSimpleNotification() async {
-    try {
-      print('🔄 Пытаемся показать уведомление...');
-
-      // Максимально простые настройки
-      const AndroidNotificationDetails androidDetails =
-          AndroidNotificationDetails(
-        'test_channel',
-        'Test Channel',
-        channelDescription: 'Test Channel for Notifications',
-        importance: Importance.max,
-        priority: Priority.high,
-      );
-
-      const DarwinNotificationDetails iosDetails = DarwinNotificationDetails();
-
-      const NotificationDetails details = NotificationDetails(
-        android: androidDetails,
-        iOS: iosDetails,
-      );
-
-      await notificationsPlugin.show(
-        999,
-        'Тестовое уведомление 🎯',
-        'Если вы видите это, уведомления работают!',
-        details,
-      );
-
-      print('✅ Уведомление отправлено в систему');
-
-      // Показываем подтверждение в интерфейсе
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(
-            content: Text('Уведомление отправлено!'),
-            backgroundColor: Colors.green,
-          ),
-        );
-      }
-    } catch (e) {
-      print('❌ Ошибка: $e');
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text('Ошибка: $e'),
-            backgroundColor: Colors.red,
-          ),
-        );
-      }
-    }
-  }
-
-  Future<void> _checkPermissions() async {
-    try {
-      print('🔍 Проверяем разрешения...');
-
-      // Для iOS
-      final bool? iOSPermissions = await notificationsPlugin
-          .resolvePlatformSpecificImplementation<
-              IOSFlutterLocalNotificationsPlugin>()
-          ?.requestPermissions(
-            alert: true,
-            badge: true,
-            sound: true,
-          );
-
-      print('📱 iOS Permissions: $iOSPermissions');
-
-      // Для Android
-      final List<ActiveNotification>? activeNotifications =
-          await notificationsPlugin
-              .resolvePlatformSpecificImplementation<
-                  AndroidFlutterLocalNotificationsPlugin>()
-              ?.getActiveNotifications();
-
-      print('🤖 Android Active Notifications: ${activeNotifications?.length}');
-
-      // Показываем результат в интерфейсе
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text('Разрешения iOS: $iOSPermissions'),
-            duration: const Duration(seconds: 3),
-          ),
-        );
-      }
-    } catch (e) {
-      print('❌ Ошибка проверки разрешений: $e');
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text('Ошибка проверки: $e'),
-            backgroundColor: Colors.red,
-          ),
-        );
-      }
-    }
-  }
-
-  @override
-  Widget build(BuildContext context) {
-    return Scaffold(
-      appBar: AppBar(
-        title: const Text('Тест уведомлений'),
-        backgroundColor: Colors.blue,
-      ),
-      body: Padding(
-        padding: const EdgeInsets.all(20.0),
-        child: Column(
-          mainAxisAlignment: MainAxisAlignment.center,
-          children: [
-            const Text(
-              'Тестирование уведомлений',
-              style: TextStyle(fontSize: 24, fontWeight: FontWeight.bold),
-            ),
-            const SizedBox(height: 30),
-            const Text(
-              'Нажмите кнопки ниже для тестирования уведомлений.',
-              textAlign: TextAlign.center,
-              style: TextStyle(fontSize: 16),
-            ),
-            const SizedBox(height: 20),
-            ElevatedButton(
-              onPressed: _checkPermissions,
-              style: ElevatedButton.styleFrom(
-                backgroundColor: Colors.orange,
-                padding:
-                    const EdgeInsets.symmetric(horizontal: 30, vertical: 15),
-              ),
-              child: const Text(
-                '🔍 Проверить разрешения',
-                style: TextStyle(fontSize: 18),
-              ),
-            ),
-            const SizedBox(height: 15),
-            ElevatedButton(
-              onPressed: _showSimpleNotification,
-              style: ElevatedButton.styleFrom(
-                backgroundColor: Colors.green,
-                padding:
-                    const EdgeInsets.symmetric(horizontal: 30, vertical: 15),
-              ),
-              child: const Text(
-                '🔔 Показать уведомление',
-                style: TextStyle(fontSize: 18),
-              ),
-            ),
-            const SizedBox(height: 15),
-            ElevatedButton(
-              onPressed: () {
-                Navigator.pushReplacement(
-                  context,
-                  MaterialPageRoute(
-                      builder: (context) => const UserSelectionScreen()),
-                );
-              },
-              style: ElevatedButton.styleFrom(
-                backgroundColor: Colors.blue,
-                padding:
-                    const EdgeInsets.symmetric(horizontal: 30, vertical: 15),
-              ),
-              child: const Text(
-                '← Вернуться в чат',
-                style: TextStyle(fontSize: 18),
-              ),
-            ),
-            const SizedBox(height: 30),
-            const Divider(),
-            const Text(
-              'Инструкция:',
-              style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold),
-            ),
-            const SizedBox(height: 10),
-            const Text(
-              '1. Нажмите "Проверить разрешения"\n'
-              '2. Нажмите "Показать уведомление"\n'
-              '3. Проверьте консоль для отладки\n'
-              '4. Сверните приложение и повторите тест',
-              textAlign: TextAlign.center,
-              style: TextStyle(fontSize: 14),
-            ),
-          ],
-        ),
-      ),
-    );
-  }
+  await notificationsPlugin.initialize(initSettings);
 }
 
 class MyApp extends StatelessWidget {
@@ -350,6 +279,9 @@ class MyApp extends StatelessWidget {
     );
   }
 }
+
+// Остальной код остается без изменений...
+// [PasswordScreen, UserSelectionScreen, ChatScreen и другие классы]
 
 // Экран ввода пароля
 class PasswordScreen extends StatefulWidget {
@@ -533,7 +465,73 @@ class _UserSelectionScreenState extends State<UserSelectionScreen> {
   final Future<SharedPreferences> _prefs = SharedPreferences.getInstance();
 
   void _showChangePasswordDialog() {
-    // ... (код смены пароля без изменений)
+    showDialog(
+      context: context,
+      builder: (BuildContext context) {
+        final TextEditingController currentPasswordController =
+            TextEditingController();
+        final TextEditingController newPasswordController =
+            TextEditingController();
+
+        return AlertDialog(
+          title: const Text('Сменить пароль'),
+          content: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              TextField(
+                controller: currentPasswordController,
+                obscureText: true,
+                decoration: const InputDecoration(
+                  labelText: 'Текущий пароль',
+                ),
+              ),
+              TextField(
+                controller: newPasswordController,
+                obscureText: true,
+                decoration: const InputDecoration(
+                  labelText: 'Новый пароль',
+                ),
+              ),
+            ],
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.of(context).pop(),
+              child: const Text('Отмена'),
+            ),
+            TextButton(
+              onPressed: () async {
+                final SharedPreferences prefs = await _prefs;
+                final String storedPassword =
+                    prefs.getString('app_password') ?? '';
+
+                if (currentPasswordController.text == storedPassword) {
+                  if (newPasswordController.text.length >= 4) {
+                    await prefs.setString(
+                        'app_password', newPasswordController.text);
+                    Navigator.of(context).pop();
+                    ScaffoldMessenger.of(context).showSnackBar(
+                      const SnackBar(content: Text('Пароль успешно изменен')),
+                    );
+                  } else {
+                    ScaffoldMessenger.of(context).showSnackBar(
+                      const SnackBar(
+                          content: Text(
+                              'Новый пароль должен содержать не менее 4 символов')),
+                    );
+                  }
+                } else {
+                  ScaffoldMessenger.of(context).showSnackBar(
+                    const SnackBar(content: Text('Неверный текущий пароль')),
+                  );
+                }
+              },
+              child: const Text('Сменить'),
+            ),
+          ],
+        );
+      },
+    );
   }
 
   Widget _buildUserIcon(
@@ -628,17 +626,6 @@ class _UserSelectionScreenState extends State<UserSelectionScreen> {
         title: const Text('Выберите пользователя'),
         backgroundColor: blue700,
         actions: [
-          IconButton(
-            icon: const Icon(Icons.notifications, color: Colors.white),
-            onPressed: () {
-              Navigator.push(
-                context,
-                MaterialPageRoute(
-                    builder: (context) => const NotificationTestScreen()),
-              );
-            },
-            tooltip: 'Тест уведомлений',
-          ),
           IconButton(
             icon: const Icon(Icons.lock, color: Colors.white),
             onPressed: _showChangePasswordDialog,
@@ -767,9 +754,8 @@ class _ChatScreenState extends State<ChatScreen> with WidgetsBindingObserver {
   Timer? _pollingTimer;
   int _lastUpdateTime = DateTime.now().millisecondsSinceEpoch;
 
-  // ДЛЯ УВЕДОМЛЕНИЙ - ДОБАВЛЯЕМ ЭТИ ПЕРЕМЕННЫЕ
-  Timer? _backgroundCheckTimer;
-  int _lastNotifiedMessageId = 0;
+  // PUSHY переменные
+  String? _pushyToken;
 
   @override
   void initState() {
@@ -779,326 +765,64 @@ class _ChatScreenState extends State<ChatScreen> with WidgetsBindingObserver {
 
     print('🚀 Чат инициализирован для пользователя: ${widget.currentUserId}');
 
-    // Запускаем диагностику СРАЗУ
-    WidgetsBinding.instance.addPostFrameCallback((_) {
-      _checkNotificationSystem();
-    });
+    // Инициализируем Pushy
+    _initializePushy();
 
     _loadMessages();
-    _startBackgroundChecker();
     _startPolling();
     _startMessageStatusChecker();
-
-    print('✅ Все системы запущены');
   }
 
-  void _checkNotificationSystem() async {
-    print('🔍 Диагностика системы уведомлений:');
+  // ==================== PUSHY ИНТЕГРАЦИЯ ====================
 
+  Future<void> _initializePushy() async {
     try {
-      // Проверяем платформу
-      print('📱 Платформа: ${Theme.of(context).platform}');
+      String? token = await PushyService.initializePushy(widget.currentUserId);
 
-      // Простой тест без сложных настроек
-      print('🎯 Отправляем тестовое уведомление...');
-      _showSimpleNotification();
-    } catch (e) {
-      print('❌ Ошибка диагностики: $e');
-    }
-  }
-
-  void _testBackgroundNotification() {
-    print('🎯 Тестируем фоновые уведомления...');
-
-    // Ждем 2 секунды и показываем уведомление
-    Timer(Duration(seconds: 2), () async {
-      print('📨 Отправка фонового уведомления...');
-
-      // Показываем уведомление
-      await _showLocalNotification(
-        'Фоновый тест 📱',
-        'Это уведомление пришло когда приложение было в фоне',
-      );
-
-      // Также показываем Snackbar для подтверждения
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text(
-                'Фоновое уведомление отправлено! Сверните приложение чтобы увидеть его.'),
-            duration: Duration(seconds: 3),
-          ),
-        );
-      }
-    });
-  }
-
-  void _showSimpleNotification() async {
-    try {
-      // Убираем const
-      final AndroidNotificationDetails androidDetails =
-          AndroidNotificationDetails(
-        'simple_channel',
-        'Простые уведомления',
-        channelDescription: 'Канал для тестовых уведомлений',
-        importance: Importance.max,
-        priority: Priority.high,
-        playSound: true,
-        enableVibration: true,
-      );
-
-      final DarwinNotificationDetails iosDetails = DarwinNotificationDetails(
-        presentAlert: true,
-        presentBadge: true,
-        presentSound: true,
-      );
-
-      final NotificationDetails details = NotificationDetails(
-        android: androidDetails,
-        iOS: iosDetails,
-      );
-
-      await notificationsPlugin.show(
-        12345,
-        'Тест уведомления 🔔',
-        'Если вы видите это, уведомления работают!',
-        details,
-      );
-
-      print('✅ Простое уведомление отправлено');
-    } catch (e) {
-      print('❌ Ошибка простого уведомления: $e');
-    }
-  }
-
-  // ==================== СИСТЕМА УВЕДОМЛЕНИЙ ====================
-
-  void _startBackgroundChecker() {
-    _backgroundCheckTimer?.cancel();
-
-    // Немедленная проверка при запуске
-    WidgetsBinding.instance.addPostFrameCallback((_) {
-      _checkForNewMessagesForNotifications();
-    });
-
-    // Периодическая проверка каждые 20 секунд
-    _backgroundCheckTimer =
-        Timer.periodic(Duration(seconds: 20), (timer) async {
-      if (!mounted) {
-        timer.cancel();
-        return;
-      }
-      await _checkForNewMessagesForNotifications();
-    });
-
-    print('✅ Фоновая проверка запущена (интервал: 20 секунд)');
-  }
-
-  Future<void> _checkForNewMessagesForNotifications() async {
-    try {
-      if (!mounted) return;
-
-      print('🔍 Проверка новых сообщений для уведомлений...');
-      print('📝 Последний известный ID: $_lastNotifiedMessageId');
-
-      final response = await _supabase
-          .from('messages')
-          .select()
-          .eq('receiver_id', widget.currentUserId)
-          .gt('id', _lastNotifiedMessageId)
-          .order('created_at', ascending: false)
-          .limit(10);
-
-      print('📊 Найдено сообщений для уведомлений: ${response.length}');
-
-      if (response.isNotEmpty) {
-        final sortedMessages = List<Map<String, dynamic>>.from(response)
-          ..sort((a, b) => (a['id'] as int).compareTo(b['id'] as int));
-
-        for (final newMessage in sortedMessages) {
-          await _processNewMessageForNotification(newMessage);
-        }
-
-        // Обновляем UI
-        if (mounted) {
-          await _checkForNewMessages();
-        }
+      if (token != null) {
+        setState(() {
+          _pushyToken = token;
+        });
+        print('✅ Pushy токен инициализирован: $token');
       }
     } catch (e) {
-      print('❌ Ошибка проверки уведомлений: $e');
+      print('❌ Ошибка инициализации Pushy: $e');
     }
   }
 
-  Future<void> _processNewMessageForNotification(
-      Map<String, dynamic> newMessage) async {
-    final messageId = newMessage['id'] as int;
-    final senderId = newMessage['sender_id'] as String;
-    final senderName = users[senderId]?['name'] ?? 'Неизвестный';
-    final messageType = newMessage['type'] ?? 'text';
-    final messageContent = newMessage['content'] ?? '';
-
-    // Пропускаем свои сообщения
-    if (senderId == widget.currentUserId) return;
-
-    print('📨 Обработка сообщения $messageId от $senderName');
-
-    await _showLocalNotification(
-      '💬 $senderName',
-      messageType == 'text'
-          ? (messageContent.length > 50
-              ? '${messageContent.substring(0, 50)}...'
-              : messageContent)
-          : '📷 Фото',
-    );
-
-    _lastNotifiedMessageId = messageId;
-    print('✅ Уведомление показано для сообщения $messageId');
-  }
-
-  Future<void> _showLocalNotification(String title, String body) async {
+  Future<void> _savePushyToken(String token) async {
     try {
-      print('🔔 Показываем уведомление: $title - $body');
-
-      // Убираем const для AndroidNotificationDetails
-      final AndroidNotificationDetails androidDetails =
-          AndroidNotificationDetails(
-        'chat_channel_v2',
-        'Уведомления чата',
-        channelDescription: 'Уведомления о новых сообщениях в чате',
-        importance: Importance.max,
-        priority: Priority.high,
-        playSound: true,
-        enableVibration: true,
-        colorized: true,
-        color: const Color(0xFF1976D2),
-        channelShowBadge: true,
-        autoCancel: true,
-      );
-
-      // Убираем const для DarwinNotificationDetails
-      final DarwinNotificationDetails iosDetails = DarwinNotificationDetails(
-        presentAlert: true,
-        presentBadge: true,
-        presentSound: true,
-        badgeNumber: 1,
-      );
-
-      // Убираем const для NotificationDetails
-      final NotificationDetails details = NotificationDetails(
-        android: androidDetails,
-        iOS: iosDetails,
-      );
-
-      final int id = DateTime.now().millisecondsSinceEpoch.remainder(100000);
-
-      await notificationsPlugin.show(
-        id,
-        title,
-        body,
-        details,
-      );
-
-      print('✅ Уведомление успешно показано (ID: $id)');
-
-      // Логируем в интерфейсе
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text('Уведомление отправлено: $title'),
-            duration: Duration(seconds: 2),
-          ),
-        );
-      }
-    } catch (e) {
-      print('❌ Ошибка показа уведомления: $e');
-
-      // Показываем ошибку в интерфейсе
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text('Ошибка уведомления: ${e.toString()}'),
-            backgroundColor: Colors.red,
-            duration: Duration(seconds: 3),
-          ),
-        );
-      }
-    }
-  }
-
-  void _testNotification() {
-    _showLocalNotification(
-      'Тест уведомления 🎯',
-      'Привет! Это проверка работы уведомлений в чате!',
-    );
-
-    // Показываем snackbar для подтверждения
-    if (mounted) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: Text('Тестовое уведомление отправлено!'),
-          duration: Duration(seconds: 2),
-        ),
-      );
-    }
-  }
-
-  // ==================== МЕТОДЫ ДЛЯ ТИПИНГА (ДОБАВЛЯЕМ ИХ) ====================
-
-  Future<void> _sendTypingEvent(bool isTyping) async {
-    if (!_isTypingFeatureAvailable) return;
-
-    try {
-      await _supabase.from('typing_indicators').upsert({
+      await _supabase.from('user_tokens').upsert({
         'user_id': widget.currentUserId,
-        'friend_id': widget.friendId,
-        'is_typing': isTyping,
-        'last_updated': DateTime.now().toIso8601String(),
+        'pushy_token': token,
+        'updated_at': DateTime.now().toIso8601String(),
       });
     } catch (e) {
-      print('Ошибка отправки события набора: $e');
-      // Если возникает ошибка, отключаем функцию типинга
-      setState(() {
-        _isTypingFeatureAvailable = false;
-      });
+      print('❌ Ошибка сохранения pushy токена: $e');
     }
   }
 
-  void _startTyping() {
-    _lastTypingTime = DateTime.now();
-    _sendTypingEvent(true);
-  }
+  Future<void> _sendPushToFriend(String messageText) async {
+    try {
+      bool success = await PushyService.sendPushNotification(
+        toUserId: widget.friendId,
+        fromUserId: widget.currentUserId,
+        fromUserName: users[widget.currentUserId]?['name'] ?? 'Пользователь',
+        messageText: messageText,
+      );
 
-  void _stopTyping() {
-    _sendTypingEvent(false);
-  }
-
-  void _handleTyping() {
-    _lastTypingTime = DateTime.now();
-
-    _typingDebounceTimer?.cancel();
-    _typingDebounceTimer = Timer(const Duration(milliseconds: 300), () {
-      _startTyping();
-    });
-
-    _typingTimer?.cancel();
-    _typingTimer = Timer(const Duration(seconds: 2), () {
-      if (DateTime.now().difference(_lastTypingTime).inSeconds >= 2) {
-        _stopTyping();
+      if (success) {
+        print('✅ Пуш-уведомление отправлено другу');
+      } else {
+        print('❌ Не удалось отправить пуш-уведомление');
       }
-    });
+    } catch (e) {
+      print('❌ Ошибка отправки пуша: $e');
+    }
   }
 
-  // ==================== СУЩЕСТВУЮЩИЕ МЕТОДЫ ====================
+  // ==================== ОСНОВНЫЕ МЕТОДЫ ЧАТА ====================
 
-  void _startRealtimeSubscription() {
-    print('ℹ️ Realtime подписка временно отключена');
-  }
-
-  void _handleNewMessage(Map<String, dynamic> newMessage) {
-    // Этот метод сейчас не используется, но оставляем для будущего
-  }
-
-  // Улучшенный polling
   void _startPolling() {
     _pollingTimer = Timer.periodic(const Duration(seconds: 3), (timer) async {
       if (!mounted) {
@@ -1111,7 +835,6 @@ class _ChatScreenState extends State<ChatScreen> with WidgetsBindingObserver {
     });
   }
 
-  // Исправленная проверка новых сообщений
   Future<void> _checkForNewMessages() async {
     try {
       final response = await _supabase
@@ -1142,29 +865,64 @@ class _ChatScreenState extends State<ChatScreen> with WidgetsBindingObserver {
     }
   }
 
+  Future<void> _sendTypingEvent(bool isTyping) async {
+    if (!_isTypingFeatureAvailable) return;
+
+    try {
+      await _supabase.from('typing_indicators').upsert({
+        'user_id': widget.currentUserId,
+        'friend_id': widget.friendId,
+        'is_typing': isTyping,
+        'last_updated': DateTime.now().toIso8601String(),
+      });
+    } catch (e) {
+      print('Ошибка отправки события набора: $e');
+    }
+  }
+
+  void _startTyping() {
+    _lastTypingTime = DateTime.now();
+    _sendTypingEvent(true);
+  }
+
+  void _stopTyping() {
+    _sendTypingEvent(false);
+  }
+
+  void _handleTyping() {
+    _lastTypingTime = DateTime.now();
+
+    _typingDebounceTimer?.cancel();
+    _typingDebounceTimer = Timer(const Duration(milliseconds: 300), () {
+      _startTyping();
+    });
+
+    _typingTimer?.cancel();
+    _typingTimer = Timer(const Duration(seconds: 2), () {
+      if (DateTime.now().difference(_lastTypingTime).inSeconds >= 2) {
+        _stopTyping();
+      }
+    });
+  }
+
   @override
   void dispose() {
-    // Отменяем таймеры и подписки
     _pollingTimer?.cancel();
-    _backgroundCheckTimer?.cancel();
-    _stopTyping(); // Теперь этот метод существует
+    _stopTyping();
     WidgetsBinding.instance.removeObserver(this);
     _messageController.dispose();
     _scrollController.dispose();
     _typingTimer?.cancel();
     _typingDebounceTimer?.cancel();
     _messageFocusNode.dispose();
-
-    print('🛑 Чат закрыт, ресурсы освобождены');
     super.dispose();
   }
 
   @override
   void didChangeAppLifecycleState(AppLifecycleState state) {
     if (state == AppLifecycleState.paused) {
-      _stopTyping(); // Теперь этот метод существует
+      _stopTyping();
     } else if (state == AppLifecycleState.resumed) {
-      // При возвращении в приложение сразу обновляем все
       _checkForNewMessages();
       _updateMessageStatuses();
     }
@@ -1195,7 +953,6 @@ class _ChatScreenState extends State<ChatScreen> with WidgetsBindingObserver {
     }
   }
 
-  // Исправленная загрузка сообщений
   Future<void> _loadMessages() async {
     try {
       await _loadCachedMessages();
@@ -1212,20 +969,6 @@ class _ChatScreenState extends State<ChatScreen> with WidgetsBindingObserver {
         setState(() {
           _messages = List<Map<String, dynamic>>.from(response);
         });
-
-        // Инициализируем последний ID сообщения для уведомлений
-        int maxId = 0;
-        for (final msg in response) {
-          final msgId = msg['id'] as int;
-          if (msgId > maxId) {
-            maxId = msgId;
-          }
-        }
-        _lastNotifiedMessageId = maxId;
-
-        print('📝 Последний ID сообщения установлен: $_lastNotifiedMessageId');
-      } else {
-        _lastNotifiedMessageId = 0;
       }
 
       await _saveMessagesLocally();
@@ -1234,11 +977,8 @@ class _ChatScreenState extends State<ChatScreen> with WidgetsBindingObserver {
         _scrollToBottom();
       });
 
-      // Отмечаем непрочитанные сообщения
       final unreadIds = _getUnreadMessageIds();
       if (unreadIds.isNotEmpty) {
-        print(
-            'При загрузке отмечаем ${unreadIds.length} сообщений как прочитанные');
         await _markMessagesAsRead(unreadIds);
       }
     } catch (e) {
@@ -1246,231 +986,7 @@ class _ChatScreenState extends State<ChatScreen> with WidgetsBindingObserver {
     }
   }
 
-  // Функция ответа на сообщение
-  void _replyToMessage(Map<String, dynamic> message) {
-    setState(() {
-      _replyingToMessage = {
-        'id': message['id'].toString(),
-        'content': message['content']?.toString() ?? '',
-        'sender_id': message['sender_id']?.toString() ?? '',
-        'type': message['type']?.toString() ?? 'text',
-      };
-    });
-    _messageFocusNode.requestFocus();
-    _scrollToBottom();
-  }
-
-  // Метод отмены ответа на сообщение
-  void _cancelReply() {
-    setState(() {
-      _replyingToMessage = null;
-    });
-  }
-
-  // Метод для отметки сообщений как доставленных
-  Future<void> _markMessagesAsDelivered(List<int> messageIds) async {
-    if (messageIds.isEmpty) return;
-
-    try {
-      // Используем цикл для надежности
-      for (int id in messageIds) {
-        await _supabase.from('messages').update({
-          'delivered_at': DateTime.now().toIso8601String(),
-        }).eq('id', id);
-      }
-    } catch (e) {
-      print('Ошибка отметки доставки: $e');
-    }
-  }
-
-  // Метод для отметки сообщений как прочитанных
-  Future<void> _markMessagesAsRead(List<int> messageIds) async {
-    if (messageIds.isEmpty) return;
-
-    try {
-      // Используем цикл для надежности
-      for (int id in messageIds) {
-        await _supabase.from('messages').update({
-          'read_at': DateTime.now().toIso8601String(),
-        }).eq('id', id);
-      }
-    } catch (e) {
-      print('Ошибка отметки прочтения: $e');
-    }
-  }
-
-  Future<void> _markNewMessagesAsRead(
-      List<Map<String, dynamic>> newMessages) async {
-    try {
-      // Находим сообщения от друга, которые еще не прочитаны
-      final unreadFromFriend = newMessages
-          .where((msg) =>
-              msg['sender_id'] == widget.friendId &&
-              msg['receiver_id'] == widget.currentUserId &&
-              msg['read_at'] == null)
-          .toList();
-
-      if (unreadFromFriend.isNotEmpty) {
-        final unreadIds =
-            unreadFromFriend.map((msg) => msg['id'] as int).toList();
-
-        await _markMessagesAsRead(unreadIds);
-
-        // Сразу обновляем локально
-        for (int id in unreadIds) {
-          final index = _messages.indexWhere((msg) => msg['id'] == id);
-          if (index != -1) {
-            setState(() {
-              _messages[index]['read_at'] = DateTime.now().toIso8601String();
-            });
-          }
-        }
-
-        await _saveMessagesLocally();
-      }
-    } catch (e) {
-      print('❌ Ошибка автоматической отметки прочтения: $e');
-    }
-  }
-
-  // Метод проверки непрочитанных сообщений
-  List<int> _getUnreadMessageIds() {
-    return _messages
-        .where((message) {
-          return message['sender_id'] == widget.friendId &&
-              message['receiver_id'] == widget.currentUserId &&
-              message['read_at'] == null;
-        })
-        .map((message) => message['id'] as int)
-        .toList();
-  }
-
-  // Метод проверки недоставленных сообщений
-  List<int> _getUndeliveredMessageIds() {
-    return _messages
-        .where((message) {
-          return message['sender_id'] == widget.currentUserId &&
-              message['receiver_id'] == widget.friendId &&
-              message['delivered_at'] == null;
-        })
-        .map((message) => message['id'] as int)
-        .toList();
-  }
-
-  // Упрощенная проверка статусов через polling
-  Future<void> _updateMessageStatuses() async {
-    try {
-      final myUndeliveredMessages = _messages
-          .where((msg) =>
-              msg['sender_id'] == widget.currentUserId &&
-              msg['delivered_at'] == null)
-          .toList();
-
-      if (myUndeliveredMessages.isEmpty) return;
-
-      final messageIds =
-          myUndeliveredMessages.map((msg) => msg['id'] as int).toList();
-
-      final response = await _supabase
-          .from('messages')
-          .select('id, delivered_at, read_at')
-          .inFilter('id', messageIds);
-
-      bool hasUpdates = false;
-
-      for (var serverMsg in response) {
-        final localIndex =
-            _messages.indexWhere((msg) => msg['id'] == serverMsg['id']);
-        if (localIndex != -1) {
-          final localMsg = _messages[localIndex];
-
-          if (localMsg['delivered_at'] != serverMsg['delivered_at'] ||
-              localMsg['read_at'] != serverMsg['read_at']) {
-            setState(() {
-              _messages[localIndex] = {
-                ...localMsg,
-                'delivered_at': serverMsg['delivered_at'],
-                'read_at': serverMsg['read_at'],
-              };
-            });
-            hasUpdates = true;
-          }
-        }
-      }
-
-      if (hasUpdates) {
-        await _saveMessagesLocally();
-      }
-    } catch (e) {
-      print('❌ Ошибка обновления статусов: $e');
-    }
-  }
-
-  // Метод для периодической проверки статуса сообщений
-  void _startMessageStatusChecker() {
-    Timer.periodic(const Duration(seconds: 5), (timer) async {
-      if (!mounted) {
-        timer.cancel();
-        return;
-      }
-
-      try {
-        await _updateMessageStatuses();
-      } catch (e) {
-        print('❌ Ошибка в таймере статусов: $e');
-      }
-    });
-  }
-
-  // Исправленная ручная синхронизация
-  Future<void> _manualSync() async {
-    // Сбрасываем время обновления, чтобы получить все сообщения
-    _lastUpdateTime = 0;
-
-    try {
-      final response = await _supabase
-          .from('messages')
-          .select()
-          .or('sender_id.eq.${widget.currentUserId},receiver_id.eq.${widget.currentUserId}')
-          .order('created_at', ascending: true);
-
-      if (response.isNotEmpty) {
-        setState(() {
-          _messages = List<Map<String, dynamic>>.from(response);
-          final latestMessage = response.reduce((a, b) =>
-              DateTime.parse(a['created_at'])
-                      .isAfter(DateTime.parse(b['created_at']))
-                  ? a
-                  : b);
-          _lastUpdateTime = DateTime.parse(latestMessage['created_at'])
-              .millisecondsSinceEpoch;
-        });
-
-        await _saveMessagesLocally();
-
-        WidgetsBinding.instance.addPostFrameCallback((_) {
-          _scrollToBottom();
-        });
-
-        final unreadIds = _getUnreadMessageIds();
-        if (unreadIds.isNotEmpty) {
-          await _markMessagesAsRead(unreadIds);
-        }
-
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-              content: Text('Синхронизировано ${response.length} сообщений')),
-        );
-      }
-    } catch (e) {
-      print('Ошибка ручной синхронизации: $e');
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('Ошибка синхронизации: $e')),
-      );
-    }
-  }
-
-  // Метод отправки сообщения с мгновенным отображением
+  // Метод отправки сообщения с PUSHY
   Future<void> _sendMessage() async {
     final String content = _messageController.text.trim();
     if (content.isEmpty) return;
@@ -1479,9 +995,8 @@ class _ChatScreenState extends State<ChatScreen> with WidgetsBindingObserver {
     _typingDebounceTimer?.cancel();
     _typingTimer?.cancel();
 
-    // Создаем временное сообщение для мгновенного отображения
     final tempMessage = {
-      'id': DateTime.now().millisecondsSinceEpoch, // Временный ID
+      'id': DateTime.now().millisecondsSinceEpoch,
       'sender_id': widget.currentUserId,
       'receiver_id': widget.friendId,
       'content': content,
@@ -1491,7 +1006,6 @@ class _ChatScreenState extends State<ChatScreen> with WidgetsBindingObserver {
       'read_at': null,
     };
 
-    // Сразу показываем сообщение
     setState(() {
       _messages.add(tempMessage);
       _isSending = true;
@@ -1523,7 +1037,6 @@ class _ChatScreenState extends State<ChatScreen> with WidgetsBindingObserver {
       if (response != null && response.isNotEmpty) {
         final serverMessage = response.first;
 
-        // Заменяем временное сообщение на серверное
         setState(() {
           final index =
               _messages.indexWhere((msg) => msg['id'] == tempMessage['id']);
@@ -1535,13 +1048,16 @@ class _ChatScreenState extends State<ChatScreen> with WidgetsBindingObserver {
         _messageController.clear();
         _cancelReply();
         await _saveMessagesLocally();
-        print('Сообщение отправлено успешно');
+
+        // ОТПРАВЛЯЕМ PUSH УВЕДОМЛЕНИЕ ДРУГУ
+        await _sendPushToFriend(content);
+
+        print('Сообщение отправлено + пуш отправлен');
       }
     } catch (e) {
       print('Ошибка отправки: $e');
       if (!mounted) return;
 
-      // Если ошибка, оставляем временное сообщение но помечаем ошибкой
       setState(() {
         final index =
             _messages.indexWhere((msg) => msg['id'] == tempMessage['id']);
@@ -1562,9 +1078,8 @@ class _ChatScreenState extends State<ChatScreen> with WidgetsBindingObserver {
     }
   }
 
-  // Метод отправки изображения с мгновенным отображением
+  // Метод отправки изображения с PUSHY
   Future<void> _sendImageMessage(String imageUrl) async {
-    // Создаем временное сообщение для мгновенного отображения
     final tempMessage = {
       'id': DateTime.now().millisecondsSinceEpoch,
       'sender_id': widget.currentUserId,
@@ -1576,7 +1091,6 @@ class _ChatScreenState extends State<ChatScreen> with WidgetsBindingObserver {
       'read_at': null,
     };
 
-    // Сразу показываем сообщение
     setState(() {
       _messages.add(tempMessage);
     });
@@ -1586,7 +1100,6 @@ class _ChatScreenState extends State<ChatScreen> with WidgetsBindingObserver {
     });
 
     try {
-      print('Отправка изображения с URL: $imageUrl');
       final messageData = {
         'sender_id': widget.currentUserId,
         'receiver_id': widget.friendId,
@@ -1608,7 +1121,6 @@ class _ChatScreenState extends State<ChatScreen> with WidgetsBindingObserver {
       if (response != null && response.isNotEmpty) {
         final serverMessage = response.first;
 
-        // Заменяем временное сообщение на серверное
         setState(() {
           final index =
               _messages.indexWhere((msg) => msg['id'] == tempMessage['id']);
@@ -1619,11 +1131,14 @@ class _ChatScreenState extends State<ChatScreen> with WidgetsBindingObserver {
 
         _cancelReply();
         await _saveMessagesLocally();
-        print('Изображение отправлено успешно');
+
+        // ОТПРАВЛЯЕМ PUSH УВЕДОМЛЕНИЕ ДРУГУ
+        await _sendPushToFriend('📷 Фото');
+
+        print('Изображение отправлено + пуш отправлен');
       }
     } catch (e) {
       print('Ошибка отправки изображения: $e');
-      // Если ошибка, оставляем временное сообщение
       setState(() {
         final index =
             _messages.indexWhere((msg) => msg['id'] == tempMessage['id']);
@@ -1821,6 +1336,150 @@ class _ChatScreenState extends State<ChatScreen> with WidgetsBindingObserver {
     );
   }
 
+  Future<void> _markMessagesAsRead(List<int> messageIds) async {
+    if (messageIds.isEmpty) return;
+
+    try {
+      for (int id in messageIds) {
+        await _supabase.from('messages').update({
+          'read_at': DateTime.now().toIso8601String(),
+        }).eq('id', id);
+      }
+    } catch (e) {
+      print('Ошибка отметки прочтения: $e');
+    }
+  }
+
+  Future<void> _markNewMessagesAsRead(
+      List<Map<String, dynamic>> newMessages) async {
+    try {
+      final unreadFromFriend = newMessages
+          .where((msg) =>
+              msg['sender_id'] == widget.friendId &&
+              msg['receiver_id'] == widget.currentUserId &&
+              msg['read_at'] == null)
+          .toList();
+
+      if (unreadFromFriend.isNotEmpty) {
+        final unreadIds =
+            unreadFromFriend.map((msg) => msg['id'] as int).toList();
+
+        await _markMessagesAsRead(unreadIds);
+
+        for (int id in unreadIds) {
+          final index = _messages.indexWhere((msg) => msg['id'] == id);
+          if (index != -1) {
+            setState(() {
+              _messages[index]['read_at'] = DateTime.now().toIso8601String();
+            });
+          }
+        }
+
+        await _saveMessagesLocally();
+      }
+    } catch (e) {
+      print('❌ Ошибка автоматической отметки прочтения: $e');
+    }
+  }
+
+  // Метод проверки непрочитанных сообщений
+  List<int> _getUnreadMessageIds() {
+    return _messages
+        .where((message) {
+          return message['sender_id'] == widget.friendId &&
+              message['receiver_id'] == widget.currentUserId &&
+              message['read_at'] == null;
+        })
+        .map((message) => message['id'] as int)
+        .toList();
+  }
+
+  // Упрощенная проверка статусов через polling
+  Future<void> _updateMessageStatuses() async {
+    try {
+      final myUndeliveredMessages = _messages
+          .where((msg) =>
+              msg['sender_id'] == widget.currentUserId &&
+              msg['delivered_at'] == null)
+          .toList();
+
+      if (myUndeliveredMessages.isEmpty) return;
+
+      final messageIds =
+          myUndeliveredMessages.map((msg) => msg['id'] as int).toList();
+
+      final response = await _supabase
+          .from('messages')
+          .select('id, delivered_at, read_at')
+          .inFilter('id', messageIds);
+
+      bool hasUpdates = false;
+
+      for (var serverMsg in response) {
+        final localIndex =
+            _messages.indexWhere((msg) => msg['id'] == serverMsg['id']);
+        if (localIndex != -1) {
+          final localMsg = _messages[localIndex];
+
+          if (localMsg['delivered_at'] != serverMsg['delivered_at'] ||
+              localMsg['read_at'] != serverMsg['read_at']) {
+            setState(() {
+              _messages[localIndex] = {
+                ...localMsg,
+                'delivered_at': serverMsg['delivered_at'],
+                'read_at': serverMsg['read_at'],
+              };
+            });
+            hasUpdates = true;
+          }
+        }
+      }
+
+      if (hasUpdates) {
+        await _saveMessagesLocally();
+      }
+    } catch (e) {
+      print('❌ Ошибка обновления статусов: $e');
+    }
+  }
+
+  // Метод для периодической проверки статуса сообщений
+  void _startMessageStatusChecker() {
+    Timer.periodic(const Duration(seconds: 5), (timer) async {
+      if (!mounted) {
+        timer.cancel();
+        return;
+      }
+
+      try {
+        await _updateMessageStatuses();
+      } catch (e) {
+        print('❌ Ошибка в таймере статусов: $e');
+      }
+    });
+  }
+
+  // Функция ответа на сообщение
+  void _replyToMessage(Map<String, dynamic> message) {
+    setState(() {
+      _replyingToMessage = {
+        'id': message['id'].toString(),
+        'content': message['content']?.toString() ?? '',
+        'sender_id': message['sender_id']?.toString() ?? '',
+        'type': message['type']?.toString() ?? 'text',
+      };
+    });
+    _messageFocusNode.requestFocus();
+    _scrollToBottom();
+  }
+
+  // Метод отмены ответа на сообщение
+  void _cancelReply() {
+    setState(() {
+      _replyingToMessage = null;
+    });
+  }
+
   Widget _buildMessageBubble(Map<String, dynamic> message) {
     final isMe = message['sender_id'] == widget.currentUserId;
     final isImage = message['type'] == 'image';
@@ -1997,19 +1656,19 @@ class _ChatScreenState extends State<ChatScreen> with WidgetsBindingObserver {
               backgroundColor: friendInfo['avatarColor'],
               child: Text(
                 friendInfo['avatarText'],
-                style: TextStyle(color: Colors.white),
+                style: const TextStyle(color: Colors.white),
               ),
             ),
-            SizedBox(width: 12),
+            const SizedBox(width: 12),
             Text(
               'Чат с ${friendInfo['name']}',
-              style: TextStyle(color: Colors.white),
+              style: const TextStyle(color: Colors.white),
             ),
           ],
         ),
         backgroundColor: blue700,
         leading: IconButton(
-          icon: Icon(Icons.arrow_back, color: Colors.white),
+          icon: const Icon(Icons.arrow_back, color: Colors.white),
           onPressed: () => Navigator.pushReplacement(
             context,
             MaterialPageRoute(
@@ -2017,31 +1676,27 @@ class _ChatScreenState extends State<ChatScreen> with WidgetsBindingObserver {
           ),
         ),
         actions: [
-          // ДОБАВЛЯЕМ КНОПКУ ТЕСТА УВЕДОМЛЕНИЙ
+          // ИНДИКАТОР СТАТУСА PUSHY
           IconButton(
-            icon: Icon(Icons.bug_report, color: Colors.white),
-            onPressed: _checkNotificationSystem,
-            tooltip: 'Диагностика уведомлений',
-          ),
-          // Кнопка простого теста
-          IconButton(
-            icon: Icon(Icons.notification_add, color: Colors.white),
-            onPressed: _showSimpleNotification,
-            tooltip: 'Простой тест',
-          ),
-          // Кнопка фонового теста
-          IconButton(
-            icon: Icon(Icons.phone_android, color: Colors.white),
-            onPressed: _testBackgroundNotification,
-            tooltip: 'Тест в фоне',
-          ),
-          IconButton(
-            icon: Icon(Icons.notifications, color: Colors.white),
-            onPressed: _testNotification,
-            tooltip: 'Тест уведомлений',
+            icon: Icon(
+              _pushyToken != null
+                  ? Icons.notifications_active
+                  : Icons.notifications_off,
+              color: _pushyToken != null ? Colors.green : Colors.grey,
+            ),
+            onPressed: () {
+              ScaffoldMessenger.of(context).showSnackBar(
+                SnackBar(
+                  content: Text(_pushyToken != null
+                      ? '✅ Push-уведомления активны'
+                      : '❌ Push-уведомления неактивны'),
+                ),
+              );
+            },
+            tooltip: 'Статус push-уведомлений',
           ),
           IconButton(
-            icon: Icon(Icons.delete_sweep, color: Colors.white),
+            icon: const Icon(Icons.delete_sweep, color: Colors.white),
             onPressed: _showClearChatDialog,
             tooltip: 'Очистить чат',
           ),
@@ -2049,17 +1704,6 @@ class _ChatScreenState extends State<ChatScreen> with WidgetsBindingObserver {
       ),
       body: Column(
         children: [
-          // Информационная панель о состоянии уведомлений
-          Container(
-            padding: EdgeInsets.symmetric(vertical: 4),
-            color: Colors.blue.withOpacity(0.1),
-            child: Center(
-              child: Text(
-                'Уведомления активны • Последний ID: $_lastNotifiedMessageId',
-                style: TextStyle(fontSize: 12, color: Colors.blue),
-              ),
-            ),
-          ),
           if (!_isTypingFeatureAvailable)
             Container(
               padding: const EdgeInsets.symmetric(vertical: 4),
@@ -2161,9 +1805,9 @@ class _ChatScreenState extends State<ChatScreen> with WidgetsBindingObserver {
                       ),
                       onChanged: (text) {
                         if (text.isNotEmpty) {
-                          _handleTyping(); // Теперь этот метод существует
+                          _handleTyping();
                         } else {
-                          _stopTyping(); // Теперь этот метод существует
+                          _stopTyping();
                           _typingDebounceTimer?.cancel();
                         }
                       },
