@@ -1062,10 +1062,10 @@ class _UserSelectionScreenState extends State<UserSelectionScreen> {
                 );
               },
               child: Container(
-                width: 120,
-                height: 120,
+                width: 150,
+                height: 300,
                 decoration: BoxDecoration(
-                  shape: BoxShape.circle,
+                  shape: BoxShape.rectangle,
                   border: Border.all(
                     color: Colors.white.withOpacity(0.8),
                     width: 3,
@@ -1104,10 +1104,10 @@ class _UserSelectionScreenState extends State<UserSelectionScreen> {
                 );
               },
               child: Container(
-                width: 120,
-                height: 120,
+                width: 150,
+                height: 300,
                 decoration: BoxDecoration(
-                  shape: BoxShape.circle,
+                  shape: BoxShape.rectangle,
                   border: Border.all(
                     color: Colors.white.withOpacity(0.8),
                     width: 3,
