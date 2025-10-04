@@ -754,9 +754,7 @@ class _PasswordScreenState extends State<PasswordScreen> {
                       const SizedBox(height: 8),
 
                       Text(
-                        _isFirstLaunch
-                            ? 'Для защиты ваших сообщений'
-                            : 'Введите пароль для входа',
+                        _isFirstLaunch ? 'Для защиты ваших сообщений' : '',
                         style: TextStyle(
                           fontSize: 16,
                           color: Colors.white.withOpacity(0.8),
@@ -786,7 +784,7 @@ class _PasswordScreenState extends State<PasswordScreen> {
                             color: Colors.black87,
                           ),
                           decoration: InputDecoration(
-                            hintText: 'Введите пароль',
+                            hintText: 'Enter your password',
                             hintStyle: TextStyle(
                               color: Colors.grey[600],
                             ),
@@ -871,7 +869,7 @@ class _PasswordScreenState extends State<PasswordScreen> {
                             shadowColor: Colors.black.withOpacity(0.3),
                           ),
                           child: Text(
-                            _isFirstLaunch ? 'Создать пароль' : 'Войти',
+                            _isFirstLaunch ? 'Создать пароль' : '𝕃𝕠𝕘 𝕚𝕟',
                             style: const TextStyle(
                               fontSize: 18,
                               fontWeight: FontWeight.w600,
@@ -886,7 +884,7 @@ class _PasswordScreenState extends State<PasswordScreen> {
                       Text(
                         _isFirstLaunch
                             ? 'Пароль будет храниться локально на устройстве'
-                            : 'Забыли пароль? Удалите данные приложения',
+                            : '',
                         style: TextStyle(
                           fontSize: 12,
                           color: Colors.white.withOpacity(0.6),
