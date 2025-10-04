@@ -1063,7 +1063,7 @@ class _UserSelectionScreenState extends State<UserSelectionScreen> {
               },
               child: Container(
                 width: 150,
-                height: 300,
+                height: 250,
                 decoration: BoxDecoration(
                   shape: BoxShape.rectangle,
                   border: Border.all(
@@ -1105,7 +1105,7 @@ class _UserSelectionScreenState extends State<UserSelectionScreen> {
               },
               child: Container(
                 width: 150,
-                height: 300,
+                height: 250,
                 decoration: BoxDecoration(
                   shape: BoxShape.rectangle,
                   border: Border.all(
