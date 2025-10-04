@@ -1047,7 +1047,7 @@ class _UserSelectionScreenState extends State<UserSelectionScreen> {
 
           // Кнопка для Labooba (синяя фигурка) - левая сторона
           Positioned(
-            left: MediaQuery.of(context).size.width * 0.0,
+            left: MediaQuery.of(context).size.width * 0.08,
             top: MediaQuery.of(context).size.height * 0.4,
             child: GestureDetector(
               onTap: () {
@@ -1089,7 +1089,7 @@ class _UserSelectionScreenState extends State<UserSelectionScreen> {
 
           // Кнопка для Babula (розовая фигурка) - правая сторона
           Positioned(
-            right: MediaQuery.of(context).size.width * 0.0,
+            right: MediaQuery.of(context).size.width * 0.08,
             top: MediaQuery.of(context).size.height * 0.4,
             child: GestureDetector(
               onTap: () {
