@@ -1089,7 +1089,7 @@ class _UserSelectionScreenState extends State<UserSelectionScreen> {
 
           // Кнопка для Babula (розовая фигурка) - правая сторона
           Positioned(
-            right: MediaQuery.of(context).size.width * 0.07,
+            right: MediaQuery.of(context).size.width * 0.065,
             top: MediaQuery.of(context).size.height * 0.4,
             child: GestureDetector(
               onTap: () {
@@ -1104,7 +1104,7 @@ class _UserSelectionScreenState extends State<UserSelectionScreen> {
                 );
               },
               child: Container(
-                width: 155,
+                width: 156,
                 height: 247,
                 decoration: BoxDecoration(
                   shape: BoxShape.rectangle,
