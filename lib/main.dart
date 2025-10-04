@@ -220,7 +220,7 @@ final Map<String, Map<String, dynamic>> users = {
   },
   'user2': {
     'name': 'Babula',
-    'avatarColor': blue700,
+    'avatarColor': const Color.fromARGB(255, 6, 33, 59),
     'avatarText': 'B',
     'imageAsset': 'assets/images/user2_avatar.png',
   },
@@ -984,97 +984,19 @@ class _UserSelectionScreenState extends State<UserSelectionScreen> {
     );
   }
 
-  Widget _buildUserIcon(
-      String userId, String userName, String imageAsset, Color color) {
-    return GestureDetector(
-      onTap: () {
-        final friendId = userId == 'user1' ? 'user2' : 'user1';
-        Navigator.pushReplacement(
-          context,
-          MaterialPageRoute(
-            builder: (context) => ChatScreen(
-              currentUserId: userId,
-              friendId: friendId,
-            ),
-          ),
-        );
-      },
-      child: Container(
-        width: 140,
-        height: 160,
-        decoration: BoxDecoration(
-          color: Colors.white.withOpacity(0.9),
-          borderRadius: BorderRadius.circular(20),
-          boxShadow: [
-            BoxShadow(
-              color: Colors.black.withOpacity(0.2),
-              blurRadius: 10,
-              offset: const Offset(0, 4),
-            ),
-          ],
-        ),
-        child: Column(
-          mainAxisAlignment: MainAxisAlignment.center,
-          children: [
-            Container(
-              width: 80,
-              height: 80,
-              decoration: BoxDecoration(
-                color: color,
-                shape: BoxShape.circle,
-                boxShadow: [
-                  BoxShadow(
-                    color: color.withOpacity(0.5),
-                    blurRadius: 10,
-                    offset: const Offset(0, 4),
-                  ),
-                ],
-              ),
-              child: ClipOval(
-                child: Image.asset(
-                  imageAsset,
-                  width: 70,
-                  height: 70,
-                  fit: BoxFit.cover,
-                  errorBuilder: (context, error, stackTrace) {
-                    return Icon(
-                      Icons.person,
-                      size: 40,
-                      color: Colors.white,
-                    );
-                  },
-                ),
-              ),
-            ),
-            const SizedBox(height: 16),
-            Text(
-              userName,
-              style: TextStyle(
-                fontSize: 18,
-                fontWeight: FontWeight.bold,
-                color: Colors.grey[800],
-              ),
-            ),
-            const SizedBox(height: 4),
-            Text(
-              'Нажмите для входа',
-              style: TextStyle(
-                fontSize: 12,
-                color: Colors.grey[600],
-              ),
-            ),
-          ],
-        ),
-      ),
-    );
-  }
-
   @override
   Widget build(BuildContext context) {
     return Scaffold(
       appBar: AppBar(
-        title: const Text('Выберите пользователя'),
-        backgroundColor: blue700,
+        title: const Text(
+          'Выберите пользователя',
+          style: TextStyle(
+            color: Colors.white,
+            fontWeight: FontWeight.bold,
+          ),
+        ),
+        backgroundColor: Colors.transparent,
+        elevation: 0,
         actions: [
           IconButton(
             icon: const Icon(Icons.lock, color: Colors.white),
@@ -1093,55 +1015,192 @@ class _UserSelectionScreenState extends State<UserSelectionScreen> {
           ),
         ],
       ),
-      body: Container(
-        decoration: const BoxDecoration(
-          gradient: LinearGradient(
-            begin: Alignment.topCenter,
-            end: Alignment.bottomCenter,
-            colors: [Color(0xFF0062FF), Color(0xFF0095FF)],
-          ),
-        ),
-        child: Center(
-          child: Column(
-            mainAxisAlignment: MainAxisAlignment.center,
-            children: [
-              const Text(
-                'Кто вы?',
-                style: TextStyle(
-                  fontSize: 24,
-                  fontWeight: FontWeight.bold,
-                  color: Colors.white,
-                ),
+      extendBodyBehindAppBar: true,
+      body: Stack(
+        children: [
+          // Фоновое изображение с фигурками
+          Container(
+            width: double.infinity,
+            height: double.infinity,
+            decoration: const BoxDecoration(
+              image: DecorationImage(
+                image:
+                    AssetImage('assets/images/user_selection_background.jpg'),
+                fit: BoxFit.cover,
               ),
-              const SizedBox(height: 30),
-              Row(
-                mainAxisAlignment: MainAxisAlignment.spaceEvenly,
-                children: [
-                  _buildUserIcon(
-                    'user1',
-                    users['user1']!['name'],
-                    users['user1']!['imageAsset'],
-                    users['user1']!['avatarColor'],
-                  ),
-                  _buildUserIcon(
-                    'user2',
-                    users['user2']!['name'],
-                    users['user2']!['imageAsset'],
-                    users['user2']!['avatarColor'],
-                  ),
+            ),
+          ),
+
+          // Затемнение для лучшей видимости текста
+          Container(
+            decoration: BoxDecoration(
+              gradient: LinearGradient(
+                begin: Alignment.topCenter,
+                end: Alignment.bottomCenter,
+                colors: [
+                  Colors.black.withOpacity(0.3),
+                  Colors.black.withOpacity(0.5),
                 ],
               ),
-              const SizedBox(height: 40),
-              const Text(
-                'Выберите свой профиль для входа в чат',
-                style: TextStyle(
-                  fontSize: 16,
-                  color: Colors.white70,
+            ),
+          ),
+
+          // Кнопка для Labooba (синяя фигурка) - левая сторона
+          Positioned(
+            left: MediaQuery.of(context).size.width * 0.1,
+            top: MediaQuery.of(context).size.height * 0.4,
+            child: GestureDetector(
+              onTap: () {
+                Navigator.pushReplacement(
+                  context,
+                  MaterialPageRoute(
+                    builder: (context) => ChatScreen(
+                      currentUserId: 'user1',
+                      friendId: 'user2',
+                    ),
+                  ),
+                );
+              },
+              child: Container(
+                width: 120,
+                height: 120,
+                decoration: BoxDecoration(
+                  shape: BoxShape.circle,
+                  border: Border.all(
+                    color: Colors.white.withOpacity(0.8),
+                    width: 3,
+                  ),
+                  boxShadow: [
+                    BoxShadow(
+                      color: Colors.blue.withOpacity(0.6),
+                      blurRadius: 15,
+                      spreadRadius: 5,
+                    ),
+                  ],
+                ),
+                child: ClipOval(
+                  child: Container(
+                    color: Colors.transparent, // Прозрачная область для нажатия
+                  ),
                 ),
               ),
-            ],
+            ),
           ),
-        ),
+
+          // Кнопка для Babula (розовая фигурка) - правая сторона
+          Positioned(
+            right: MediaQuery.of(context).size.width * 0.1,
+            top: MediaQuery.of(context).size.height * 0.4,
+            child: GestureDetector(
+              onTap: () {
+                Navigator.pushReplacement(
+                  context,
+                  MaterialPageRoute(
+                    builder: (context) => ChatScreen(
+                      currentUserId: 'user2',
+                      friendId: 'user1',
+                    ),
+                  ),
+                );
+              },
+              child: Container(
+                width: 120,
+                height: 120,
+                decoration: BoxDecoration(
+                  shape: BoxShape.circle,
+                  border: Border.all(
+                    color: Colors.white.withOpacity(0.8),
+                    width: 3,
+                  ),
+                  boxShadow: [
+                    BoxShadow(
+                      color: Colors.pink.withOpacity(0.6),
+                      blurRadius: 15,
+                      spreadRadius: 5,
+                    ),
+                  ],
+                ),
+                child: ClipOval(
+                  child: Container(
+                    color: Colors.transparent, // Прозрачная область для нажатия
+                  ),
+                ),
+              ),
+            ),
+          ),
+
+          // Подсказки для пользователя
+          Positioned(
+            bottom: MediaQuery.of(context).size.height * 0.15,
+            left: 0,
+            right: 0,
+            child: Column(
+              children: [
+                const Text(
+                  'Нажмите на вашу фигурку',
+                  style: TextStyle(
+                    fontSize: 18,
+                    color: Colors.white,
+                    fontWeight: FontWeight.bold,
+                    shadows: [
+                      Shadow(
+                        blurRadius: 10,
+                        color: Colors.black,
+                        offset: Offset(2, 2),
+                      ),
+                    ],
+                  ),
+                ),
+                const SizedBox(height: 8),
+                Row(
+                  mainAxisAlignment: MainAxisAlignment.spaceEvenly,
+                  children: [
+                    Column(
+                      children: [
+                        Container(
+                          width: 12,
+                          height: 12,
+                          decoration: const BoxDecoration(
+                            color: Colors.blue,
+                            shape: BoxShape.circle,
+                          ),
+                        ),
+                        const SizedBox(height: 4),
+                        const Text(
+                          'Labooba',
+                          style: TextStyle(
+                            color: Colors.white,
+                            fontWeight: FontWeight.bold,
+                          ),
+                        ),
+                      ],
+                    ),
+                    Column(
+                      children: [
+                        Container(
+                          width: 12,
+                          height: 12,
+                          decoration: const BoxDecoration(
+                            color: Colors.pink,
+                            shape: BoxShape.circle,
+                          ),
+                        ),
+                        const SizedBox(height: 4),
+                        const Text(
+                          'Babula',
+                          style: TextStyle(
+                            color: Colors.white,
+                            fontWeight: FontWeight.bold,
+                          ),
+                        ),
+                      ],
+                    ),
+                  ],
+                ),
+              ],
+            ),
+          ),
+        ],
       ),
     );
   }
