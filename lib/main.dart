@@ -1047,7 +1047,7 @@ class _UserSelectionScreenState extends State<UserSelectionScreen> {
 
           // Кнопка для Labooba (синяя фигурка) - левая сторона
           Positioned(
-            left: MediaQuery.of(context).size.width * 0.088,
+            left: MediaQuery.of(context).size.width * 0.084,
             top: MediaQuery.of(context).size.height * 0.4,
             child: GestureDetector(
               onTap: () {
@@ -1063,7 +1063,7 @@ class _UserSelectionScreenState extends State<UserSelectionScreen> {
               },
               child: Container(
                 width: 150,
-                height: 245,
+                height: 247,
                 decoration: BoxDecoration(
                   shape: BoxShape.rectangle,
                   border: Border.all(
@@ -1104,8 +1104,8 @@ class _UserSelectionScreenState extends State<UserSelectionScreen> {
                 );
               },
               child: Container(
-                width: 150,
-                height: 245,
+                width: 155,
+                height: 247,
                 decoration: BoxDecoration(
                   shape: BoxShape.rectangle,
                   border: Border.all(
