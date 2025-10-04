@@ -1062,27 +1062,9 @@ class _UserSelectionScreenState extends State<UserSelectionScreen> {
                 );
               },
               child: Container(
-                width: 150,
-                height: 247,
-                decoration: BoxDecoration(
-                  shape: BoxShape.rectangle,
-                  border: Border.all(
-                    color: Colors.white.withOpacity(0.8),
-                    width: 3,
-                  ),
-                  boxShadow: [
-                    BoxShadow(
-                      color: Colors.blue.withOpacity(0.6),
-                      blurRadius: 15,
-                      spreadRadius: 5,
-                    ),
-                  ],
-                ),
-                child: ClipOval(
-                  child: Container(
-                    color: Colors.transparent, // Прозрачная область для нажатия
-                  ),
-                ),
+                width: 150, // Настроенный размер
+                height: 247, // Настроенный размер
+                color: Colors.transparent, // Полностью прозрачный
               ),
             ),
           ),
@@ -1104,102 +1086,14 @@ class _UserSelectionScreenState extends State<UserSelectionScreen> {
                 );
               },
               child: Container(
-                width: 156,
-                height: 247,
-                decoration: BoxDecoration(
-                  shape: BoxShape.rectangle,
-                  border: Border.all(
-                    color: Colors.white.withOpacity(0.8),
-                    width: 3,
-                  ),
-                  boxShadow: [
-                    BoxShadow(
-                      color: Colors.pink.withOpacity(0.6),
-                      blurRadius: 15,
-                      spreadRadius: 5,
-                    ),
-                  ],
-                ),
-                child: ClipOval(
-                  child: Container(
-                    color: Colors.transparent, // Прозрачная область для нажатия
-                  ),
-                ),
+                width: 156, // Настроенный размер
+                height: 247, // Настроенный размер
+                color: Colors.transparent, // Полностью прозрачный
               ),
             ),
           ),
 
           // Подсказки для пользователя
-          Positioned(
-            bottom: MediaQuery.of(context).size.height * 0.15,
-            left: 0,
-            right: 0,
-            child: Column(
-              children: [
-                const Text(
-                  'Нажмите на вашу фигурку',
-                  style: TextStyle(
-                    fontSize: 18,
-                    color: Colors.white,
-                    fontWeight: FontWeight.bold,
-                    shadows: [
-                      Shadow(
-                        blurRadius: 10,
-                        color: Colors.black,
-                        offset: Offset(2, 2),
-                      ),
-                    ],
-                  ),
-                ),
-                const SizedBox(height: 8),
-                Row(
-                  mainAxisAlignment: MainAxisAlignment.spaceEvenly,
-                  children: [
-                    Column(
-                      children: [
-                        Container(
-                          width: 12,
-                          height: 12,
-                          decoration: const BoxDecoration(
-                            color: Colors.blue,
-                            shape: BoxShape.circle,
-                          ),
-                        ),
-                        const SizedBox(height: 4),
-                        const Text(
-                          'Labooba',
-                          style: TextStyle(
-                            color: Colors.white,
-                            fontWeight: FontWeight.bold,
-                          ),
-                        ),
-                      ],
-                    ),
-                    Column(
-                      children: [
-                        Container(
-                          width: 12,
-                          height: 12,
-                          decoration: const BoxDecoration(
-                            color: Colors.pink,
-                            shape: BoxShape.circle,
-                          ),
-                        ),
-                        const SizedBox(height: 4),
-                        const Text(
-                          'Babula',
-                          style: TextStyle(
-                            color: Colors.white,
-                            fontWeight: FontWeight.bold,
-                          ),
-                        ),
-                      ],
-                    ),
-                  ],
-                ),
-              ],
-            ),
-          ),
         ],
       ),
     );
