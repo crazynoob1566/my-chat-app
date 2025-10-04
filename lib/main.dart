@@ -17,10 +17,12 @@ import 'package:image_gallery_saver/image_gallery_saver.dart';
 import 'package:permission_handler/permission_handler.dart';
 import 'package:http/http.dart' as http;
 import 'dart:async';
-import 'pushy_service.dart';
+import 'package:flutter/services.dart';
+import 'telegram_bind_screen.dart'; // Добавьте эту строку в импорты
 
 // ==================== PUSHY SERVICE (HTTP-ONLY) ====================
 import 'dart:math';
+import 'telegram_service.dart';
 
 class PushyService {
   // ЗАМЕНИТЕ НА ВАШ SECRET API KEY ИЗ PUSHY DASHBOARD
@@ -280,8 +282,302 @@ class MyApp extends StatelessWidget {
   }
 }
 
-// Остальной код остается без изменений...
-// [PasswordScreen, UserSelectionScreen, ChatScreen и другие классы]
+// Экран привязки Telegram
+class TelegramBindScreen extends StatefulWidget {
+  final String userId;
+
+  const TelegramBindScreen({super.key, required this.userId});
+
+  @override
+  State<TelegramBindScreen> createState() => _TelegramBindScreenState();
+}
+
+class _TelegramBindScreenState extends State<TelegramBindScreen> {
+  String _bindCode = '';
+  bool _isLoading = true;
+  Map<String, dynamic> _status = {};
+
+  @override
+  void initState() {
+    super.initState();
+    _loadStatus();
+    _generateBindCode();
+  }
+
+  Future<void> _loadStatus() async {
+    final status = await TelegramService.getTelegramStatus(widget.userId);
+    setState(() {
+      _status = status;
+      _isLoading = false;
+    });
+  }
+
+  Future<void> _generateBindCode() async {
+    final code = TelegramService.generateBindCode();
+    setState(() {
+      _bindCode = code;
+    });
+    await TelegramService.saveBindCode(widget.userId, code);
+  }
+
+  Future<void> _checkBinding() async {
+    setState(() {
+      _isLoading = true;
+    });
+
+    // Даем время боту обработать команду
+    await Future.delayed(Duration(seconds: 3));
+
+    await _loadStatus();
+
+    if (_status['isBound'] == true) {
+      // Отправляем тестовое сообщение
+      await TelegramService.sendTestMessage(_status['chatId']);
+
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text('✅ Telegram успешно привязан!'),
+          backgroundColor: Colors.green,
+        ),
+      );
+    }
+  }
+
+  Future<void> _unbindTelegram() async {
+    try {
+      final supabase = Supabase.instance.client;
+      await supabase
+          .from('users')
+          .update({'telegram_chat_id': null}).eq('id', widget.userId);
+
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('✅ Telegram отвязан')),
+      );
+
+      await _loadStatus();
+      await _generateBindCode();
+    } catch (e) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('❌ Ошибка: $e')),
+      );
+    }
+  }
+
+  void _copyToClipboard(String text) {
+    // Импортируйте package:flutter/services.dart
+    Clipboard.setData(ClipboardData(text: text));
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(content: Text('📋 Код скопирован')),
+    );
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Scaffold(
+      appBar: AppBar(
+        title: Text('Привязка Telegram'),
+        backgroundColor: blue700,
+      ),
+      body: _isLoading
+          ? Center(child: CircularProgressIndicator())
+          : Padding(
+              padding: const EdgeInsets.all(20.0),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  // Статус
+                  Card(
+                    child: Padding(
+                      padding: const EdgeInsets.all(16.0),
+                      child: Row(
+                        children: [
+                          Icon(
+                            _status['isBound'] == true
+                                ? Icons.check_circle
+                                : Icons.link_off,
+                            color: _status['isBound'] == true
+                                ? Colors.green
+                                : Colors.orange,
+                          ),
+                          SizedBox(width: 12),
+                          Expanded(
+                            child: Text(
+                              _status['isBound'] == true
+                                  ? '✅ Telegram привязан'
+                                  : '🔗 Telegram не привязан',
+                              style: TextStyle(
+                                fontSize: 18,
+                                fontWeight: FontWeight.bold,
+                              ),
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                  ),
+
+                  SizedBox(height: 20),
+
+                  if (_status['isBound'] == true) ...[
+                    // Уже привязан
+                    Text(
+                      'Ваш Telegram успешно привязан!',
+                      style: TextStyle(fontSize: 16),
+                    ),
+                    SizedBox(height: 10),
+                    Container(
+                      // ИСПРАВЛЕННЫЙ ВИДЖЕТ
+                      padding: EdgeInsets.all(8),
+                      decoration: BoxDecoration(
+                        color: Colors.grey[100],
+                        borderRadius: BorderRadius.circular(4),
+                      ),
+                      child: Text(
+                        'Chat ID: ${_status['chatId']}',
+                        style: TextStyle(
+                          fontFamily: 'Monospace',
+                        ),
+                      ),
+                    ),
+                    SizedBox(height: 20),
+                    ElevatedButton(
+                      onPressed: _unbindTelegram,
+                      style: ElevatedButton.styleFrom(
+                        backgroundColor: Colors.red,
+                      ),
+                      child: Text('Отвязать Telegram'),
+                    ),
+                  ] else ...[
+                    // остальной код без изменений...
+                    // Инструкция по привязке
+                    Text(
+                      'Чтобы привязать Telegram:',
+                      style: TextStyle(
+                        fontSize: 18,
+                        fontWeight: FontWeight.bold,
+                      ),
+                    ),
+                    SizedBox(height: 16),
+
+                    _buildStep(1, 'Откройте Telegram и найдите бота:'),
+                    SizedBox(height: 8),
+                    Container(
+                      padding: EdgeInsets.all(12),
+                      decoration: BoxDecoration(
+                        color: Colors.blue[50],
+                        borderRadius: BorderRadius.circular(8),
+                      ),
+                      child: Row(
+                        children: [
+                          Text(
+                            '@${TelegramService.botUsername}',
+                            style: TextStyle(
+                              fontWeight: FontWeight.bold,
+                              fontSize: 16,
+                            ),
+                          ),
+                          Spacer(),
+                          IconButton(
+                            icon: Icon(Icons.content_copy),
+                            onPressed: () => _copyToClipboard(
+                                '@${TelegramService.botUsername}'),
+                          ),
+                        ],
+                      ),
+                    ),
+
+                    SizedBox(height: 16),
+                    _buildStep(2, 'Отправьте боту команду:'),
+                    SizedBox(height: 8),
+                    Container(
+                      padding: EdgeInsets.all(12),
+                      decoration: BoxDecoration(
+                        color: Colors.green[50],
+                        borderRadius: BorderRadius.circular(8),
+                      ),
+                      child: Row(
+                        children: [
+                          Text(
+                            '/bind $_bindCode',
+                            style: TextStyle(
+                              fontFamily: 'Monospace',
+                              fontWeight: FontWeight.bold,
+                              fontSize: 16,
+                            ),
+                          ),
+                          Spacer(),
+                          IconButton(
+                            icon: Icon(Icons.content_copy),
+                            onPressed: () =>
+                                _copyToClipboard('/bind $_bindCode'),
+                          ),
+                        ],
+                      ),
+                    ),
+
+                    SizedBox(height: 16),
+                    _buildStep(3, 'Нажмите кнопку проверки:'),
+                    SizedBox(height: 16),
+
+                    ElevatedButton.icon(
+                      onPressed: _checkBinding,
+                      icon: Icon(Icons.refresh),
+                      label: Text('Проверить привязку'),
+                      style: ElevatedButton.styleFrom(
+                        backgroundColor: Colors.green,
+                        foregroundColor: Colors.white,
+                        minimumSize: Size(double.infinity, 50),
+                      ),
+                    ),
+
+                    SizedBox(height: 20),
+                    Text(
+                      'Код действителен 10 минут',
+                      style: TextStyle(
+                        color: Colors.grey,
+                        fontStyle: FontStyle.italic,
+                      ),
+                    ),
+                  ],
+                ],
+              ),
+            ),
+    );
+  }
+
+  Widget _buildStep(int number, String text) {
+    return Row(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Container(
+          width: 24,
+          height: 24,
+          decoration: BoxDecoration(
+            color: Colors.blue,
+            borderRadius: BorderRadius.circular(12),
+          ),
+          child: Center(
+            child: Text(
+              '$number',
+              style: TextStyle(
+                color: Colors.white,
+                fontWeight: FontWeight.bold,
+                fontSize: 14,
+              ),
+            ),
+          ),
+        ),
+        SizedBox(width: 12),
+        Expanded(
+          child: Text(
+            text,
+            style: TextStyle(fontSize: 16),
+          ),
+        ),
+      ],
+    );
+  }
+}
 
 // Экран ввода пароля
 class PasswordScreen extends StatefulWidget {
@@ -773,8 +1069,6 @@ class _ChatScreenState extends State<ChatScreen> with WidgetsBindingObserver {
     _startMessageStatusChecker();
   }
 
-  // ==================== PUSHY ИНТЕГРАЦИЯ ====================
-
   Future<void> _initializePushy() async {
     try {
       String? token = await PushyService.initializePushy(widget.currentUserId);
@@ -783,7 +1077,10 @@ class _ChatScreenState extends State<ChatScreen> with WidgetsBindingObserver {
         setState(() {
           _pushyToken = token;
         });
-        print('✅ Pushy токен инициализирован: $token');
+
+        print('✅ Pushy успешно инициализирован. Токен: $token');
+      } else {
+        print('❌ Не удалось инициализировать Pushy');
       }
     } catch (e) {
       print('❌ Ошибка инициализации Pushy: $e');
@@ -1049,10 +1346,22 @@ class _ChatScreenState extends State<ChatScreen> with WidgetsBindingObserver {
         _cancelReply();
         await _saveMessagesLocally();
 
-        // ОТПРАВЛЯЕМ PUSH УВЕДОМЛЕНИЕ ДРУГУ
-        await _sendPushToFriend(content);
+        // ✅ ОТПРАВКА TELEGRAM УВЕДОМЛЕНИЯ
+        print('📱 Отправка Telegram уведомления...');
+        final telegramSent = await TelegramService.sendTelegramNotification(
+          toUserId: widget.friendId,
+          fromUserId: widget.currentUserId,
+          fromUserName: users[widget.currentUserId]?['name'] ?? 'Пользователь',
+          messageText: content,
+        );
 
-        print('Сообщение отправлено + пуш отправлен');
+        if (telegramSent) {
+          print('✅ Telegram уведомление отправлено!');
+        } else {
+          print('❌ Не удалось отправить Telegram уведомление');
+        }
+
+        print('💬 Сообщение отправлено + Telegram статус: $telegramSent');
       }
     } catch (e) {
       print('Ошибка отправки: $e');
@@ -1676,24 +1985,27 @@ class _ChatScreenState extends State<ChatScreen> with WidgetsBindingObserver {
           ),
         ),
         actions: [
-          // ИНДИКАТОР СТАТУСА PUSHY
-          IconButton(
-            icon: Icon(
-              _pushyToken != null
-                  ? Icons.notifications_active
-                  : Icons.notifications_off,
-              color: _pushyToken != null ? Colors.green : Colors.grey,
-            ),
-            onPressed: () {
-              ScaffoldMessenger.of(context).showSnackBar(
-                SnackBar(
-                  content: Text(_pushyToken != null
-                      ? '✅ Push-уведомления активны'
-                      : '❌ Push-уведомления неактивны'),
+          FutureBuilder<Map<String, dynamic>>(
+            future: TelegramService.getTelegramStatus(widget.currentUserId),
+            builder: (context, snapshot) {
+              final isBound = snapshot.data?['isBound'] ?? false;
+              return IconButton(
+                icon: Icon(
+                  Icons.telegram,
+                  color: isBound ? Colors.blue[100] : Colors.grey[300],
                 ),
+                onPressed: () {
+                  Navigator.push(
+                    context,
+                    MaterialPageRoute(
+                      builder: (context) =>
+                          TelegramBindScreen(userId: widget.currentUserId),
+                    ),
+                  );
+                },
+                tooltip: isBound ? 'Telegram привязан' : 'Привязать Telegram',
               );
             },
-            tooltip: 'Статус push-уведомлений',
           ),
           IconButton(
             icon: const Icon(Icons.delete_sweep, color: Colors.white),
