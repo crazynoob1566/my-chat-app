@@ -655,95 +655,251 @@ class _PasswordScreenState extends State<PasswordScreen> {
       body: Container(
         decoration: const BoxDecoration(
           gradient: LinearGradient(
-            begin: Alignment.topCenter,
-            end: Alignment.bottomCenter,
-            colors: [Color(0xFF0062FF), Color(0xFF0095FF)],
+            begin: Alignment.topLeft,
+            end: Alignment.bottomRight,
+            colors: [
+              Color(0xFF667eea),
+              Color(0xFF764ba2),
+              Color(0xFFf093fb),
+              Color(0xFFf5576c),
+            ],
+            stops: [0.1, 0.4, 0.7, 1.0],
           ),
         ),
-        child: Center(
-          child: SingleChildScrollView(
-            child: Padding(
-              padding: const EdgeInsets.all(20.0),
-              child: Column(
-                mainAxisAlignment: MainAxisAlignment.center,
-                children: [
-                  const Icon(
-                    Icons.lock_outline,
-                    size: 80,
-                    color: Colors.white,
-                  ),
-                  const SizedBox(height: 20),
-                  Text(
-                    _isFirstLaunch
-                        ? 'Установите пароль'
-                        : '𝕊𝕒𝕝𝕒𝕞 𝕡𝕠𝕡𝕠𝕝𝕒𝕞',
-                    style: const TextStyle(
-                      fontSize: 24,
-                      fontWeight: FontWeight.bold,
-                      color: Colors.white,
-                    ),
-                  ),
-                  const SizedBox(height: 30),
-                  TextField(
-                    controller: _passwordController,
-                    obscureText: _obscurePassword,
-                    style: const TextStyle(color: Colors.white),
-                    decoration: InputDecoration(
-                      hintText: 'Пароль',
-                      hintStyle: const TextStyle(color: Colors.white70),
-                      border: OutlineInputBorder(
-                        borderRadius: BorderRadius.circular(10),
-                        borderSide: BorderSide.none,
-                      ),
-                      filled: true,
-                      fillColor: Colors.white.withOpacity(0.2),
-                      prefixIcon: const Icon(Icons.lock, color: Colors.white),
-                      suffixIcon: IconButton(
-                        icon: Icon(
-                          _obscurePassword
-                              ? Icons.visibility
-                              : Icons.visibility_off,
-                          color: Colors.white,
-                        ),
-                        onPressed: () {
-                          setState(() {
-                            _obscurePassword = !_obscurePassword;
-                          });
-                        },
-                      ),
-                    ),
-                    onSubmitted: (_) => _checkPassword(),
-                  ),
-                  if (_errorMessage.isNotEmpty)
-                    Padding(
-                      padding: const EdgeInsets.only(top: 10),
-                      child: Text(
-                        _errorMessage,
-                        style: const TextStyle(color: Colors.red, fontSize: 14),
-                      ),
-                    ),
-                  const SizedBox(height: 20),
-                  ElevatedButton(
-                    onPressed: _checkPassword,
-                    style: ElevatedButton.styleFrom(
-                      backgroundColor: Colors.white,
-                      foregroundColor: blue700,
-                      padding: const EdgeInsets.symmetric(
-                          horizontal: 40, vertical: 15),
-                      shape: RoundedRectangleBorder(
-                        borderRadius: BorderRadius.circular(10),
-                      ),
-                    ),
-                    child: Text(
-                      _isFirstLaunch ? 'Установить' : 'Войти',
-                      style: const TextStyle(
-                          fontSize: 16, fontWeight: FontWeight.bold),
-                    ),
-                  ),
-                ],
+        child: Stack(
+          children: [
+            // Декоративные элементы фона
+            Positioned(
+              top: -50,
+              right: -30,
+              child: Container(
+                width: 150,
+                height: 150,
+                decoration: BoxDecoration(
+                  color: Colors.white.withOpacity(0.1),
+                  shape: BoxShape.circle,
+                ),
               ),
             ),
-          ),
+            Positioned(
+              bottom: -80,
+              left: -40,
+              child: Container(
+                width: 200,
+                height: 200,
+                decoration: BoxDecoration(
+                  color: Colors.white.withOpacity(0.1),
+                  shape: BoxShape.circle,
+                ),
+              ),
+            ),
+            Positioned(
+              top: 100,
+              left: 20,
+              child: Container(
+                width: 80,
+                height: 80,
+                decoration: BoxDecoration(
+                  color: Colors.white.withOpacity(0.05),
+                  shape: BoxShape.circle,
+                ),
+              ),
+            ),
+
+            Center(
+              child: SingleChildScrollView(
+                child: Padding(
+                  padding: const EdgeInsets.all(24.0),
+                  child: Column(
+                    mainAxisAlignment: MainAxisAlignment.center,
+                    children: [
+                      // Анимированная иконка
+                      AnimatedContainer(
+                        duration: const Duration(milliseconds: 500),
+                        width: 120,
+                        height: 120,
+                        decoration: BoxDecoration(
+                          color: Colors.white.withOpacity(0.9),
+                          shape: BoxShape.circle,
+                          boxShadow: [
+                            BoxShadow(
+                              color: Colors.black.withOpacity(0.2),
+                              blurRadius: 20,
+                              offset: const Offset(0, 10),
+                            ),
+                          ],
+                        ),
+                        child: const Icon(
+                          Icons.lock_outline_rounded,
+                          size: 60,
+                          color: Color(0xFF667eea),
+                        ),
+                      ),
+
+                      const SizedBox(height: 40),
+
+                      // Заголовок
+                      Text(
+                        _isFirstLaunch
+                            ? 'Создайте пароль'
+                            : '𝕊𝕒𝕝𝕒𝕞 𝕡𝕠𝕡𝕠𝕝𝕒𝕞',
+                        style: const TextStyle(
+                          fontSize: 28,
+                          fontWeight: FontWeight.bold,
+                          color: Colors.white,
+                          letterSpacing: 0.5,
+                        ),
+                      ),
+
+                      const SizedBox(height: 8),
+
+                      Text(
+                        _isFirstLaunch
+                            ? 'Для защиты ваших сообщений'
+                            : 'Введите пароль для входа',
+                        style: TextStyle(
+                          fontSize: 16,
+                          color: Colors.white.withOpacity(0.8),
+                        ),
+                      ),
+
+                      const SizedBox(height: 40),
+
+                      // Поле ввода пароля
+                      Container(
+                        decoration: BoxDecoration(
+                          color: Colors.white.withOpacity(0.9),
+                          borderRadius: BorderRadius.circular(16),
+                          boxShadow: [
+                            BoxShadow(
+                              color: Colors.black.withOpacity(0.1),
+                              blurRadius: 15,
+                              offset: const Offset(0, 5),
+                            ),
+                          ],
+                        ),
+                        child: TextField(
+                          controller: _passwordController,
+                          obscureText: _obscurePassword,
+                          style: const TextStyle(
+                            fontSize: 18,
+                            color: Colors.black87,
+                          ),
+                          decoration: InputDecoration(
+                            hintText: 'Введите пароль',
+                            hintStyle: TextStyle(
+                              color: Colors.grey[600],
+                            ),
+                            border: InputBorder.none,
+                            contentPadding: const EdgeInsets.symmetric(
+                              horizontal: 20,
+                              vertical: 18,
+                            ),
+                            prefixIcon: Icon(
+                              Icons.lock_outline_rounded,
+                              color: Colors.grey[600],
+                            ),
+                            suffixIcon: IconButton(
+                              icon: Icon(
+                                _obscurePassword
+                                    ? Icons.visibility_outlined
+                                    : Icons.visibility_off_outlined,
+                                color: Colors.grey[600],
+                              ),
+                              onPressed: () {
+                                setState(() {
+                                  _obscurePassword = !_obscurePassword;
+                                });
+                              },
+                            ),
+                          ),
+                          onSubmitted: (_) => _checkPassword(),
+                        ),
+                      ),
+
+                      if (_errorMessage.isNotEmpty) ...[
+                        const SizedBox(height: 16),
+                        Container(
+                          padding: const EdgeInsets.symmetric(
+                            horizontal: 16,
+                            vertical: 12,
+                          ),
+                          decoration: BoxDecoration(
+                            color: Colors.red.withOpacity(0.9),
+                            borderRadius: BorderRadius.circular(12),
+                          ),
+                          child: Row(
+                            children: [
+                              Icon(
+                                Icons.error_outline_rounded,
+                                color: Colors.white,
+                                size: 20,
+                              ),
+                              const SizedBox(width: 8),
+                              Expanded(
+                                child: Text(
+                                  _errorMessage,
+                                  style: const TextStyle(
+                                    color: Colors.white,
+                                    fontSize: 14,
+                                  ),
+                                ),
+                              ),
+                            ],
+                          ),
+                        ),
+                      ],
+
+                      const SizedBox(height: 30),
+
+                      // Кнопка входа
+                      SizedBox(
+                        width: double.infinity,
+                        child: ElevatedButton(
+                          onPressed: _checkPassword,
+                          style: ElevatedButton.styleFrom(
+                            backgroundColor: Colors.white,
+                            foregroundColor: const Color(0xFF667eea),
+                            padding: const EdgeInsets.symmetric(
+                              horizontal: 40,
+                              vertical: 18,
+                            ),
+                            shape: RoundedRectangleBorder(
+                              borderRadius: BorderRadius.circular(16),
+                            ),
+                            elevation: 5,
+                            shadowColor: Colors.black.withOpacity(0.3),
+                          ),
+                          child: Text(
+                            _isFirstLaunch ? 'Создать пароль' : 'Войти',
+                            style: const TextStyle(
+                              fontSize: 18,
+                              fontWeight: FontWeight.w600,
+                            ),
+                          ),
+                        ),
+                      ),
+
+                      const SizedBox(height: 20),
+
+                      // Дополнительная информация
+                      Text(
+                        _isFirstLaunch
+                            ? 'Пароль будет храниться локально на устройстве'
+                            : 'Забыли пароль? Удалите данные приложения',
+                        style: TextStyle(
+                          fontSize: 12,
+                          color: Colors.white.withOpacity(0.6),
+                          fontStyle: FontStyle.italic,
+                        ),
+                        textAlign: TextAlign.center,
+                      ),
+                    ],
+                  ),
+                ),
+              ),
+            ),
+          ],
         ),
       ),
     );
