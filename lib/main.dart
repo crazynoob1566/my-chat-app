@@ -1172,7 +1172,23 @@ class _ChatScreenState extends State<ChatScreen> with WidgetsBindingObserver {
     _loadMessages();
     _startPolling();
     _startMessageStatusChecker();
-    _startTypingPolling(); // Добавляем polling для индикатора набора
+    _startTypingPolling();
+    _resetOwnTypingIndicator(); // Сбрасываем свой индикатор при запуске
+  }
+
+  // Сбрасываем свой индикатор набора при запуске
+  Future<void> _resetOwnTypingIndicator() async {
+    try {
+      await _supabase.from('typing_indicators').upsert({
+        'user_id': widget.currentUserId,
+        'friend_id': widget.friendId,
+        'is_typing': false,
+        'last_updated': DateTime.now().toIso8601String(),
+      });
+      print('✅ Сброшен индикатор набора при запуске');
+    } catch (e) {
+      print('❌ Ошибка сброса индикатора: $e');
+    }
   }
 
   void _startTypingPolling() {
@@ -1186,7 +1202,7 @@ class _ChatScreenState extends State<ChatScreen> with WidgetsBindingObserver {
     });
   }
 
-  // Проверяем, печатает ли собеседник
+  // Упрощенная и надежная проверка индикатора набора
   Future<void> _checkFriendTyping() async {
     try {
       final response = await _supabase
@@ -1196,37 +1212,39 @@ class _ChatScreenState extends State<ChatScreen> with WidgetsBindingObserver {
           .eq('friend_id', widget.currentUserId)
           .maybeSingle();
 
-      if (response != null) {
+      if (response != null && mounted) {
         final isTyping = response['is_typing'] ?? false;
         final lastUpdated = DateTime.parse(response['last_updated']);
+        final now = DateTime.now();
 
-        // Если событие было более 3 секунд назад, считаем что пользователь перестал печатать
-        if (DateTime.now().difference(lastUpdated).inSeconds > 3) {
+        // Автоматически сбрасываем если событие старше 4 секунд
+        if (now.difference(lastUpdated).inSeconds > 4) {
           if (_isFriendTyping) {
             setState(() {
               _isFriendTyping = false;
             });
           }
         } else {
-          if (isTyping && !_isFriendTyping) {
+          // Обновляем состояние только если оно изменилось
+          if (isTyping != _isFriendTyping) {
             setState(() {
-              _isFriendTyping = true;
-            });
-          } else if (!isTyping && _isFriendTyping) {
-            setState(() {
-              _isFriendTyping = false;
+              _isFriendTyping = isTyping;
             });
           }
         }
-      } else {
-        if (_isFriendTyping) {
-          setState(() {
-            _isFriendTyping = false;
-          });
-        }
+      } else if (mounted && _isFriendTyping) {
+        // Записи нет - сбрасываем индикатор
+        setState(() {
+          _isFriendTyping = false;
+        });
       }
     } catch (e) {
       print('❌ Ошибка проверки индикатора набора: $e');
+      if (mounted && _isFriendTyping) {
+        setState(() {
+          _isFriendTyping = false;
+        });
+      }
     }
   }
 
@@ -1323,14 +1341,19 @@ class _ChatScreenState extends State<ChatScreen> with WidgetsBindingObserver {
     }
   }
 
+  // Надежная отправка события набора
   Future<void> _sendTypingEvent(bool isTyping) async {
     try {
-      await _supabase.from('typing_indicators').upsert({
+      final result = await _supabase.from('typing_indicators').upsert({
         'user_id': widget.currentUserId,
         'friend_id': widget.friendId,
         'is_typing': isTyping,
         'last_updated': DateTime.now().toIso8601String(),
       });
+
+      if (isTyping) {
+        print('📝 Отправлено событие набора: true');
+      }
     } catch (e) {
       print('❌ Ошибка отправки события набора: $e');
     }
@@ -1343,21 +1366,34 @@ class _ChatScreenState extends State<ChatScreen> with WidgetsBindingObserver {
 
   void _stopTyping() {
     _sendTypingEvent(false);
+    // Принудительно сбрасываем локальное состояние
+    if (mounted && _isFriendTyping) {
+      setState(() {
+        _isFriendTyping = false;
+      });
+    }
   }
 
   void _handleTyping() {
+    if (!mounted) return;
+
     _lastTypingTime = DateTime.now();
 
-    // Отменяем предыдущий таймер и отправляем событие набора
+    // Отменяем предыдущие таймеры
     _typingDebounceTimer?.cancel();
+    _typingTimer?.cancel();
+
+    // Запускаем новый таймер для отправки события (задержка 500ms)
     _typingDebounceTimer = Timer(const Duration(milliseconds: 500), () {
-      _startTyping();
+      if (mounted && _messageController.text.isNotEmpty) {
+        _startTyping();
+      }
     });
 
-    // Таймер для автоматической остановки набора через 2 секунды бездействия
-    _typingTimer?.cancel();
+    // Таймер для автоматической остановки через 2 секунды бездействия
     _typingTimer = Timer(const Duration(seconds: 2), () {
-      if (DateTime.now().difference(_lastTypingTime).inSeconds >= 2) {
+      if (mounted &&
+          DateTime.now().difference(_lastTypingTime).inSeconds >= 2) {
         _stopTyping();
       }
     });
@@ -1365,14 +1401,15 @@ class _ChatScreenState extends State<ChatScreen> with WidgetsBindingObserver {
 
   @override
   void dispose() {
-    _pollingTimer?.cancel();
-    _typingPollingTimer?.cancel();
+    // Гарантированно останавливаем все таймеры и индикаторы
     _stopTyping();
+    _typingPollingTimer?.cancel();
+    _typingTimer?.cancel();
+    _typingDebounceTimer?.cancel();
+    _pollingTimer?.cancel();
     WidgetsBinding.instance.removeObserver(this);
     _messageController.dispose();
     _scrollController.dispose();
-    _typingTimer?.cancel();
-    _typingDebounceTimer?.cancel();
     _messageFocusNode.dispose();
     super.dispose();
   }
@@ -1450,6 +1487,7 @@ class _ChatScreenState extends State<ChatScreen> with WidgetsBindingObserver {
     final String content = _messageController.text.trim();
     if (content.isEmpty) return;
 
+    // Гарантированно останавливаем индикатор набора
     _stopTyping();
     _typingDebounceTimer?.cancel();
     _typingTimer?.cancel();
@@ -1549,6 +1587,7 @@ class _ChatScreenState extends State<ChatScreen> with WidgetsBindingObserver {
     }
   }
 
+  // Упрощенный и надежный индикатор набора
   Widget _buildTypingIndicator() {
     if (!_isFriendTyping) return const SizedBox.shrink();
 
@@ -1556,39 +1595,31 @@ class _ChatScreenState extends State<ChatScreen> with WidgetsBindingObserver {
         {
           'name': widget.friendId,
           'avatarColor': Colors.grey,
+          'avatarText': '?'
         };
 
     return Padding(
-      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 4),
       child: Row(
         children: [
-          // Аватар собеседника
-          Container(
-            width: 36,
-            height: 36,
-            decoration: BoxDecoration(
-              color: friendInfo['avatarColor'],
-              shape: BoxShape.circle,
-            ),
-            child: Center(
-              child: Text(
-                friendInfo['avatarText'] ?? '?',
-                style: const TextStyle(
-                  color: Colors.white,
-                  fontWeight: FontWeight.bold,
-                  fontSize: 14,
-                ),
+          CircleAvatar(
+            backgroundColor: friendInfo['avatarColor'],
+            radius: 16,
+            child: Text(
+              friendInfo['avatarText'] ?? '?',
+              style: const TextStyle(
+                color: Colors.white,
+                fontSize: 12,
+                fontWeight: FontWeight.bold,
               ),
             ),
           ),
-          const SizedBox(width: 12),
-
-          // Пузырек с анимированными точками
+          const SizedBox(width: 8),
           Container(
-            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+            padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
             decoration: BoxDecoration(
               color: Colors.grey[200],
-              borderRadius: BorderRadius.circular(20),
+              borderRadius: BorderRadius.circular(16),
               boxShadow: [
                 BoxShadow(
                   color: Colors.black.withOpacity(0.1),
@@ -1600,10 +1631,39 @@ class _ChatScreenState extends State<ChatScreen> with WidgetsBindingObserver {
             child: Row(
               mainAxisSize: MainAxisSize.min,
               children: [
-                // Анимированные точки
-                _TypingDots(),
+                // Простые статичные точки
+                Row(
+                  children: [
+                    Container(
+                      width: 6,
+                      height: 6,
+                      margin: const EdgeInsets.symmetric(horizontal: 1),
+                      decoration: BoxDecoration(
+                        color: Colors.grey[600],
+                        shape: BoxShape.circle,
+                      ),
+                    ),
+                    Container(
+                      width: 6,
+                      height: 6,
+                      margin: const EdgeInsets.symmetric(horizontal: 1),
+                      decoration: BoxDecoration(
+                        color: Colors.grey[600],
+                        shape: BoxShape.circle,
+                      ),
+                    ),
+                    Container(
+                      width: 6,
+                      height: 6,
+                      margin: const EdgeInsets.symmetric(horizontal: 1),
+                      decoration: BoxDecoration(
+                        color: Colors.grey[600],
+                        shape: BoxShape.circle,
+                      ),
+                    ),
+                  ],
+                ),
                 const SizedBox(width: 8),
-                // Текст
                 Text(
                   '${friendInfo['name']} печатает...',
                   style: const TextStyle(
@@ -2236,7 +2296,7 @@ class _ChatScreenState extends State<ChatScreen> with WidgetsBindingObserver {
             ),
           ),
 
-          // Поле ввода сообщения (без изменений)
+          // Поле ввода сообщения
           if (_isUploadingImage)
             const LinearProgressIndicator(
               backgroundColor: Colors.transparent,
