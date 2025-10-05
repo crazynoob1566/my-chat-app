@@ -989,7 +989,7 @@ class _UserSelectionScreenState extends State<UserSelectionScreen> {
     return Scaffold(
       appBar: AppBar(
         title: const Text(
-          'Выберите пользователя',
+          '',
           style: TextStyle(
             color: Colors.white,
             fontWeight: FontWeight.bold,
@@ -1038,8 +1038,8 @@ class _UserSelectionScreenState extends State<UserSelectionScreen> {
                 begin: Alignment.topCenter,
                 end: Alignment.bottomCenter,
                 colors: [
-                  Colors.black.withOpacity(0.3),
-                  Colors.black.withOpacity(0.5),
+                  Colors.black.withOpacity(0.0),
+                  Colors.black.withOpacity(0.0),
                 ],
               ),
             ),
