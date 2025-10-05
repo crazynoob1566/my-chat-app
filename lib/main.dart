@@ -1146,8 +1146,8 @@ class _ChatScreenState extends State<ChatScreen> with WidgetsBindingObserver {
   bool _isFriendTyping = false;
   Timer? _typingTimer;
   Timer? _typingDebounceTimer;
+  Timer? _typingPollingTimer;
   DateTime _lastTypingTime = DateTime.now();
-  bool _isTypingFeatureAvailable = true;
 
   // Переменные для ответов на сообщения
   Map<String, dynamic>? _replyingToMessage;
@@ -1168,12 +1168,66 @@ class _ChatScreenState extends State<ChatScreen> with WidgetsBindingObserver {
 
     print('🚀 Чат инициализирован для пользователя: ${widget.currentUserId}');
 
-    // Инициализируем Pushy
     _initializePushy();
-
     _loadMessages();
     _startPolling();
     _startMessageStatusChecker();
+    _startTypingPolling(); // Добавляем polling для индикатора набора
+  }
+
+  void _startTypingPolling() {
+    _typingPollingTimer =
+        Timer.periodic(const Duration(seconds: 2), (timer) async {
+      if (!mounted) {
+        timer.cancel();
+        return;
+      }
+      await _checkFriendTyping();
+    });
+  }
+
+  // Проверяем, печатает ли собеседник
+  Future<void> _checkFriendTyping() async {
+    try {
+      final response = await _supabase
+          .from('typing_indicators')
+          .select()
+          .eq('user_id', widget.friendId)
+          .eq('friend_id', widget.currentUserId)
+          .maybeSingle();
+
+      if (response != null) {
+        final isTyping = response['is_typing'] ?? false;
+        final lastUpdated = DateTime.parse(response['last_updated']);
+
+        // Если событие было более 3 секунд назад, считаем что пользователь перестал печатать
+        if (DateTime.now().difference(lastUpdated).inSeconds > 3) {
+          if (_isFriendTyping) {
+            setState(() {
+              _isFriendTyping = false;
+            });
+          }
+        } else {
+          if (isTyping && !_isFriendTyping) {
+            setState(() {
+              _isFriendTyping = true;
+            });
+          } else if (!isTyping && _isFriendTyping) {
+            setState(() {
+              _isFriendTyping = false;
+            });
+          }
+        }
+      } else {
+        if (_isFriendTyping) {
+          setState(() {
+            _isFriendTyping = false;
+          });
+        }
+      }
+    } catch (e) {
+      print('❌ Ошибка проверки индикатора набора: $e');
+    }
   }
 
   Future<void> _initializePushy() async {
@@ -1270,8 +1324,6 @@ class _ChatScreenState extends State<ChatScreen> with WidgetsBindingObserver {
   }
 
   Future<void> _sendTypingEvent(bool isTyping) async {
-    if (!_isTypingFeatureAvailable) return;
-
     try {
       await _supabase.from('typing_indicators').upsert({
         'user_id': widget.currentUserId,
@@ -1280,7 +1332,7 @@ class _ChatScreenState extends State<ChatScreen> with WidgetsBindingObserver {
         'last_updated': DateTime.now().toIso8601String(),
       });
     } catch (e) {
-      print('Ошибка отправки события набора: $e');
+      print('❌ Ошибка отправки события набора: $e');
     }
   }
 
@@ -1296,11 +1348,13 @@ class _ChatScreenState extends State<ChatScreen> with WidgetsBindingObserver {
   void _handleTyping() {
     _lastTypingTime = DateTime.now();
 
+    // Отменяем предыдущий таймер и отправляем событие набора
     _typingDebounceTimer?.cancel();
-    _typingDebounceTimer = Timer(const Duration(milliseconds: 300), () {
+    _typingDebounceTimer = Timer(const Duration(milliseconds: 500), () {
       _startTyping();
     });
 
+    // Таймер для автоматической остановки набора через 2 секунды бездействия
     _typingTimer?.cancel();
     _typingTimer = Timer(const Duration(seconds: 2), () {
       if (DateTime.now().difference(_lastTypingTime).inSeconds >= 2) {
@@ -1312,6 +1366,7 @@ class _ChatScreenState extends State<ChatScreen> with WidgetsBindingObserver {
   @override
   void dispose() {
     _pollingTimer?.cancel();
+    _typingPollingTimer?.cancel();
     _stopTyping();
     WidgetsBinding.instance.removeObserver(this);
     _messageController.dispose();
@@ -1492,6 +1547,77 @@ class _ChatScreenState extends State<ChatScreen> with WidgetsBindingObserver {
         });
       }
     }
+  }
+
+  Widget _buildTypingIndicator() {
+    if (!_isFriendTyping) return const SizedBox.shrink();
+
+    final friendInfo = users[widget.friendId] ??
+        {
+          'name': widget.friendId,
+          'avatarColor': Colors.grey,
+        };
+
+    return Padding(
+      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+      child: Row(
+        children: [
+          // Аватар собеседника
+          Container(
+            width: 36,
+            height: 36,
+            decoration: BoxDecoration(
+              color: friendInfo['avatarColor'],
+              shape: BoxShape.circle,
+            ),
+            child: Center(
+              child: Text(
+                friendInfo['avatarText'] ?? '?',
+                style: const TextStyle(
+                  color: Colors.white,
+                  fontWeight: FontWeight.bold,
+                  fontSize: 14,
+                ),
+              ),
+            ),
+          ),
+          const SizedBox(width: 12),
+
+          // Пузырек с анимированными точками
+          Container(
+            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+            decoration: BoxDecoration(
+              color: Colors.grey[200],
+              borderRadius: BorderRadius.circular(20),
+              boxShadow: [
+                BoxShadow(
+                  color: Colors.black.withOpacity(0.1),
+                  blurRadius: 4,
+                  offset: const Offset(0, 2),
+                ),
+              ],
+            ),
+            child: Row(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                // Анимированные точки
+                _TypingDots(),
+                const SizedBox(width: 8),
+                // Текст
+                Text(
+                  '${friendInfo['name']} печатает...',
+                  style: const TextStyle(
+                    color: Colors.grey,
+                    fontSize: 14,
+                    fontStyle: FontStyle.italic,
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ],
+      ),
+    );
   }
 
   // Метод отправки изображения с PUSHY
@@ -1937,58 +2063,6 @@ class _ChatScreenState extends State<ChatScreen> with WidgetsBindingObserver {
     );
   }
 
-  Widget _buildTypingIndicator() {
-    if (!_isTypingFeatureAvailable) return const SizedBox.shrink();
-    if (!_isFriendTyping) return const SizedBox.shrink();
-
-    return Padding(
-      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 4),
-      child: Row(
-        children: [
-          CircleAvatar(
-            backgroundColor:
-                users[widget.friendId]?['avatarColor'] ?? Colors.grey,
-            radius: 12,
-            child: Text(
-              users[widget.friendId]?['avatarText'] ?? '?',
-              style: const TextStyle(color: Colors.white, fontSize: 10),
-            ),
-          ),
-          const SizedBox(width: 8),
-          Container(
-            padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
-            decoration: BoxDecoration(
-              color: Colors.white.withOpacity(0.9),
-              borderRadius: BorderRadius.circular(16),
-              boxShadow: [
-                BoxShadow(
-                  color: Colors.black.withOpacity(0.2),
-                  blurRadius: 4,
-                  offset: const Offset(0, 2),
-                ),
-              ],
-            ),
-            child: Row(
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                const _TypingDots(),
-                const SizedBox(width: 4),
-                Text(
-                  '${users[widget.friendId]?['name'] ?? 'Собеседник'} печатает...',
-                  style: const TextStyle(
-                    color: Colors.black87,
-                    fontSize: 12,
-                    fontStyle: FontStyle.italic,
-                  ),
-                ),
-              ],
-            ),
-          ),
-        ],
-      ),
-    );
-  }
-
   Widget _buildReplyPreview() {
     if (_replyingToMessage == null) return const SizedBox.shrink();
 
@@ -2123,20 +2197,10 @@ class _ChatScreenState extends State<ChatScreen> with WidgetsBindingObserver {
       ),
       body: Column(
         children: [
-          if (!_isTypingFeatureAvailable)
-            Container(
-              padding: const EdgeInsets.symmetric(vertical: 4),
-              color: Colors.orange.withOpacity(0.3),
-              child: const Center(
-                child: Text(
-                  'Функция "печатает..." временно недоступна',
-                  style: TextStyle(fontSize: 12, color: Colors.orange),
-                ),
-              ),
-            ),
           Expanded(
             child: Stack(
               children: [
+                // Фон чата
                 Container(
                   decoration: BoxDecoration(
                     image: DecorationImage(
@@ -2149,36 +2213,30 @@ class _ChatScreenState extends State<ChatScreen> with WidgetsBindingObserver {
                     ),
                   ),
                 ),
-                _messages.isEmpty
-                    ? const Center(
-                        child: Text(
-                          'Нет сообщений',
-                          style: TextStyle(
-                            color: Colors.white70,
-                            fontSize: 18,
-                            fontWeight: FontWeight.bold,
-                          ),
-                        ),
-                      )
-                    : Column(
-                        children: [
-                          Expanded(
-                            child: ListView.builder(
-                              controller: _scrollController,
-                              padding: const EdgeInsets.all(8),
-                              itemCount: _messages.length,
-                              itemBuilder: (context, index) {
-                                final message = _messages[index];
-                                return _buildMessageBubble(message);
-                              },
-                            ),
-                          ),
-                          _buildTypingIndicator(),
-                        ],
+
+                // Сообщения и индикатор набора
+                Column(
+                  children: [
+                    Expanded(
+                      child: ListView.builder(
+                        controller: _scrollController,
+                        padding: const EdgeInsets.all(8),
+                        itemCount: _messages.length,
+                        itemBuilder: (context, index) {
+                          final message = _messages[index];
+                          return _buildMessageBubble(message);
+                        },
                       ),
+                    ),
+                    // Индикатор набора сообщения
+                    _buildTypingIndicator(),
+                  ],
+                ),
               ],
             ),
           ),
+
+          // Поле ввода сообщения (без изменений)
           if (_isUploadingImage)
             const LinearProgressIndicator(
               backgroundColor: Colors.transparent,
@@ -2872,42 +2930,72 @@ class _FullScreenImageScreenState extends State<FullScreenImageScreen> {
   }
 }
 
-class _TypingDots extends StatelessWidget {
+// Обновляем анимированные точки для лучшей видимости
+class _TypingDots extends StatefulWidget {
   const _TypingDots();
 
   @override
+  State<_TypingDots> createState() => _TypingDotsState();
+}
+
+class _TypingDotsState extends State<_TypingDots>
+    with SingleTickerProviderStateMixin {
+  late AnimationController _controller;
+  late List<Animation<double>> _animations;
+
+  @override
+  void initState() {
+    super.initState();
+    _controller = AnimationController(
+      duration: const Duration(milliseconds: 1200),
+      vsync: this,
+    )..repeat();
+
+    _animations = List.generate(3, (index) {
+      return Tween<double>(begin: 0.4, end: 1.0).animate(
+        CurvedAnimation(
+          parent: _controller,
+          curve: Interval(
+            0.2 * index,
+            0.2 * (index + 1),
+            curve: Curves.easeInOut,
+          ),
+        ),
+      );
+    });
+  }
+
+  @override
+  void dispose() {
+    _controller.dispose();
+    super.dispose();
+  }
+
+  @override
   Widget build(BuildContext context) {
-    return Row(
-      mainAxisSize: MainAxisSize.min,
-      children: [
-        Container(
-          width: 6,
-          height: 6,
-          margin: const EdgeInsets.symmetric(horizontal: 1),
-          decoration: const BoxDecoration(
-            color: Colors.black87,
-            shape: BoxShape.circle,
-          ),
-        ),
-        Container(
-          width: 6,
-          height: 6,
-          margin: const EdgeInsets.symmetric(horizontal: 1),
-          decoration: const BoxDecoration(
-            color: Colors.black87,
-            shape: BoxShape.circle,
-          ),
-        ),
-        Container(
-          width: 6,
-          height: 6,
-          margin: const EdgeInsets.symmetric(horizontal: 1),
-          decoration: const BoxDecoration(
-            color: Colors.black87,
-            shape: BoxShape.circle,
-          ),
-        ),
-      ],
+    return AnimatedBuilder(
+      animation: _controller,
+      builder: (context, child) {
+        return Row(
+          mainAxisSize: MainAxisSize.min,
+          children: List.generate(3, (index) {
+            return Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 2),
+              child: Transform.scale(
+                scale: _animations[index].value,
+                child: Container(
+                  width: 8,
+                  height: 8,
+                  decoration: BoxDecoration(
+                    color: Colors.grey[600],
+                    shape: BoxShape.circle,
+                  ),
+                ),
+              ),
+            );
+          }),
+        );
+      },
     );
   }
 }
