@@ -318,7 +318,7 @@ class _PasswordScreenState extends State<PasswordScreen> {
         _navigateToUserSelection();
       } else {
         setState(() {
-          _errorMessage = 'Неверный пароль';
+          _errorMessage = 'Invalid login';
           _passwordController.clear();
         });
       }
@@ -419,7 +419,7 @@ class _PasswordScreenState extends State<PasswordScreen> {
                       Text(
                         _isFirstLaunch
                             ? 'Создайте пароль'
-                            : '𝕊𝕒𝕝𝕒𝕞 𝕡𝕠𝕡𝕠𝕝𝕒𝕞',
+                            : ' ℂ𝕠𝕞𝕡𝕝𝕖𝕥𝕖 𝕧𝕖𝕣𝕚𝕗𝕚𝕔𝕒𝕥𝕚𝕠𝕟',
                         style: const TextStyle(
                           fontSize: 28,
                           fontWeight: FontWeight.bold,
@@ -456,7 +456,7 @@ class _PasswordScreenState extends State<PasswordScreen> {
                             color: Colors.black87,
                           ),
                           decoration: InputDecoration(
-                            hintText: 'Enter your password',
+                            hintText: 'Create a login',
                             hintStyle: TextStyle(color: Colors.grey[600]),
                             border: InputBorder.none,
                             contentPadding: const EdgeInsets.symmetric(
