@@ -178,9 +178,9 @@ FlutterLocalNotificationsPlugin notificationsPlugin =
     FlutterLocalNotificationsPlugin();
 
 // Конфигурационные константы
-const String _defaultSupabaseUrl = 'https://tpwjupuaflpswdvudexi.supabase.co';
+const String _defaultSupabaseUrl = 'https://jqtifqvuvwqnafliicdb.supabase.co';
 const String _defaultSupabaseAnonKey =
-    'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InRwd2p1cHVhZmxwc3dkdnVkZXhpIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NTgwMzk2NDAsImV4cCI6MjA3MzYxNTY0MH0.hKSB7GHtUWS1Jyyo5pGiCe2wX2OBvyywbbG7kjo62fo';
+    'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImpxdGlmcXZ1dndxbmFmbGlpY2RiIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODM4NTYwNDksImV4cCI6MjA5OTQzMjA0OX0.Qh-dMekssZSIlN_RuORRBrmPiXd9qfwlV9gshAdGbHc';
 
 // Цвета
 const Color blue700 = Color(0xFF1976D2);
